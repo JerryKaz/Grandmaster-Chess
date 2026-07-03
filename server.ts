@@ -44,6 +44,7 @@ async function startServer() {
   app.use(express.json());
 
   // 1. API: Create Multiplayer Room
+  app.post("/api/rooms/create", (req, res) => {
     const { board } = req.body;
     // Generate a random 4-letter room ID
     const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
