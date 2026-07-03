@@ -39,7 +39,7 @@ The application incorporates a custom client-side chess rule validator, an integ
 
 ---
 
-## 🛠 Tech Stack & Architecture
+## Tech Stack & Architecture
 
 ### Frontend
 *   **Framework:** React 18+ (with Vite)
@@ -56,7 +56,7 @@ The application incorporates a custom client-side chess rule validator, an integ
 
 ---
 
-## 🗺 System Architecture & Folder Structure
+##  System Architecture & Folder Structure
 
 The code is cleanly modularized into separate areas of concern to make sure it is easy to maintain:
 
