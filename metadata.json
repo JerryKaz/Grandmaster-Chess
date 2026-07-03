@@ -1,0 +1,6 @@
+{
+  "name": "Chess Game",
+  "description": "A clean, modular, and highly polished modern Chess application built in React and TypeScript.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
