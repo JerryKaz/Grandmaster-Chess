@@ -132,16 +132,11 @@ The `/api/analyze` POST route serves as the bridge between your live match and t
 
 To unlock full grandmaster-level coaching feedback, create a `.env` file at the root of your project or specify the variable in your environment:
 
-```env
-# Secure Gemini API Key from Google AI Studio
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
 *Note: The application will run smoothly with a local material heuristic evaluation fallback if this key is omitted.*
 
 ---
 
-## 🛠 Installation & Running Locally
+## Installation & Running Locally
 
 ### 1. Install Dependencies
 ```bash
