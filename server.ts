@@ -2,8 +2,46 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+// Lazy initialization helper for Gemini
+let aiInstance: any = null;
+function getGeminiClient() {
+  if (!aiInstance) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error("GEMINI_API_KEY is not defined");
+    }
+    aiInstance = new GoogleGenAI({ apiKey: key });
+  }
+  return aiInstance;
+}
+
+function evaluateHeuristics(board: any[][]): number {
+  if (!board || !Array.isArray(board)) return 0;
+  let score = 0;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r]?.[c];
+      if (piece) {
+        let val = 0;
+        switch (piece.type) {
+          case 'pawn': val = 100; break;
+          case 'knight': val = 320; break;
+          case 'bishop': val = 330; break;
+          case 'rook': val = 500; break;
+          case 'queen': val = 900; break;
+          case 'king': val = 20000; break;
+        }
+        if (piece.color === 'white') score += val;
+        else score -= val;
+      }
+    }
+  }
+  return score;
+}
 
 // Define Types for Multiplayer rooms
 interface RoomState {
@@ -153,6 +191,90 @@ async function startServer() {
     room.lastUpdated = Date.now();
 
     res.json(room);
+  });
+
+  // 8. API: AI Analysis (Gemini Integration)
+  app.post("/api/analyze", async (req, res) => {
+    try {
+      const { moveHistory, board, activeColor } = req.body;
+
+      // Check if GEMINI_API_KEY is configured
+      if (!process.env.GEMINI_API_KEY) {
+        // Fallback: Use simple local evaluation metrics if API key is absent
+        const materialBalance = evaluateHeuristics(board);
+        return res.json({
+          score: materialBalance / 100.0,
+          summary: "Local Engine Analysis: White has a material balance score of " + (materialBalance >= 0 ? "+" : "") + (materialBalance / 100).toFixed(1) + ". To unlock grandmaster-level coaching commentary, dynamic plan suggestions, and tactical coaching, please configure your GEMINI_API_KEY in the environment!",
+          whitePlan: "Control the center (e4/d4 squares), castle early to secure your king, develop your minor pieces (knights and bishops), and establish active rooks on open files.",
+          blackPlan: "Challenge White's center with d5 or e5, develop knights to f6/c6, secure your king, and search for tactical patterns like pawn levers to gain counterplay.",
+          lastMoveCommentary: moveHistory && moveHistory.length > 0 
+            ? `The last move played was ${moveHistory[moveHistory.length - 1].notation}. Position is complex with dynamic tactical lines.`
+            : "The game is currently in the starting setup. Standard opening principles apply."
+        });
+      }
+
+      // Initialize client lazily
+      const ai = getGeminiClient();
+
+      // Format current board pieces for Gemini's understanding
+      let boardDescription = "";
+      for (let r = 0; r < 8; r++) {
+        const rank = 8 - r;
+        const piecesInRow = [];
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r]?.[c];
+          if (piece) {
+            const file = String.fromCharCode(97 + c);
+            piecesInRow.push(`${piece.color} ${piece.type} at ${file}${rank}`);
+          }
+        }
+        if (piecesInRow.length > 0) {
+          boardDescription += `Rank ${rank}: ${piecesInRow.join(", ")}; `;
+        }
+      }
+
+      // Format move history
+      const movesText = moveHistory && moveHistory.length > 0
+        ? moveHistory.map((m: any, idx: number) => {
+            const num = Math.floor(idx / 2) + 1;
+            const isWhite = idx % 2 === 0;
+            return isWhite ? `${num}. ${m.notation}` : `${m.notation}`;
+          }).join(" ")
+        : "No moves played yet.";
+
+      const prompt = `You are an elite Chess Grandmaster and Coaching Assistant. Analyze the following chess position.
+Active player to move next: ${activeColor}
+Moves played in this game: ${movesText}
+Current piece positions: ${boardDescription}
+
+Provide your expert analysis of this specific position. Your response must be in strict JSON format.
+
+Expected JSON schema:
+{
+  "score": number, // Estimated position score from White's perspective, e.g., +1.2 if White is better, -0.5 if Black is better. Standard 0.0 for equal.
+  "summary": "string", // High-quality 2-3 sentence overview of the positional balance, pawn structures, king safety, and active files.
+  "whitePlan": "string", // Clear, strategic recommendations and future plans for White in this position.
+  "blackPlan": "string", // Clear, strategic recommendations and future plans for Black in this position.
+  "lastMoveCommentary": "string" // Explanatory coaching commentary about the tactical or positional quality of the very last move.
+}
+
+Return ONLY the raw JSON object. Do not wrap it in markdown codeblocks.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const responseText = response.text || "";
+      const result = JSON.parse(responseText.trim());
+      res.json(result);
+    } catch (err: any) {
+      console.error("Gemini Analysis Error:", err);
+      res.status(500).json({ error: "Failed to generate position analysis: " + err.message });
+    }
   });
 
   // Vite middleware for development

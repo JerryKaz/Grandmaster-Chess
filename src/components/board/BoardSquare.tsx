@@ -11,6 +11,8 @@ interface BoardSquareProps {
   isMoveCandidate?: boolean;
   isLastMoveSource?: boolean;
   isLastMoveDestination?: boolean;
+  isHintSource?: boolean;
+  isHintDestination?: boolean;
 }
 
 export default function BoardSquare({
@@ -21,6 +23,8 @@ export default function BoardSquare({
   isMoveCandidate = false,
   isLastMoveSource = false,
   isLastMoveDestination = false,
+  isHintSource = false,
+  isHintDestination = false,
 }: BoardSquareProps) {
   const activeColor = useChessStore((state) => state.activeColor);
   const selectedSquare = useChessStore((state) => state.selectedSquare);
@@ -30,8 +34,6 @@ export default function BoardSquare({
   const setPendingPromotion = useChessStore((state) => state.setPendingPromotion);
   
   const gameMode = useChessStore((state) => state.gameMode);
-  const aiColor = useChessStore((state) => state.aiColor);
-  const aiIsThinking = useChessStore((state) => state.aiIsThinking);
   const multiplayerRole = useChessStore((state) => state.multiplayerRole);
   const multiplayerRoomId = useChessStore((state) => state.multiplayerRoomId);
   const boardTheme = useChessStore((state) => state.boardTheme);
@@ -74,15 +76,15 @@ export default function BoardSquare({
 
   const handleSquareClick = () => {
     // Guards:
-    // A) AI is currently thinking or it's AI's turn
-    if (gameMode === 'ai') {
-      if (aiIsThinking) return;
-      if (activeColor === aiColor) return;
-    }
-
-    // B) Multiplayer mode: it's not our turn
+    // A) Multiplayer mode: it's not our turn
     if (gameMode === 'multiplayer') {
       if (multiplayerRole && activeColor !== multiplayerRole) return;
+    }
+
+    // B) AI mode: it's not our turn
+    if (gameMode === 'ai') {
+      const aiPlayerColor = useChessStore.getState().aiPlayerColor;
+      if (activeColor !== aiPlayerColor) return;
     }
 
     // 1. If clicked square is a valid destination for the selected piece, move it
@@ -159,6 +161,24 @@ export default function BoardSquare({
           id={`last-move-overlay-${row}-${col}`}
           className="absolute inset-0 bg-amber-400/25 pointer-events-none"
         />
+      )}
+
+      {/* Best Move Hint Highlight Overlay (Source) */}
+      {isHintSource && (
+        <div
+          id={`hint-source-overlay-${row}-${col}`}
+          className="absolute inset-0 bg-violet-500/15 ring-4 ring-violet-500 ring-inset z-10 animate-pulse pointer-events-none"
+        />
+      )}
+
+      {/* Best Move Hint Highlight Overlay (Destination) */}
+      {isHintDestination && (
+        <div
+          id={`hint-destination-overlay-${row}-${col}`}
+          className="absolute inset-0 bg-violet-600/20 border-4 border-dashed border-violet-500 z-10 animate-pulse pointer-events-none flex items-center justify-center"
+        >
+          <div className="w-5 h-5 rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.8)]" />
+        </div>
       )}
 
       {/* Rank Label (Top-Left) */}

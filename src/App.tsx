@@ -24,11 +24,14 @@ import {
   Trophy,
   Clock,
   X,
-  Flag
+  Flag,
+  Lightbulb,
+  Sparkles
 } from 'lucide-react';
 import { useChessStore } from './features/chess/store/chessStore';
 import ChessBoard from './components/board/ChessBoard';
 import { calculateLegalMoves } from './features/chess/engine/moveValidator';
+import { findBestMove } from './features/chess/engine/chessEngine';
 import { convertToAlgebraic } from './features/chess/utils/initialBoard';
 import { SquareCoordinates, Color } from './features/chess/models/types';
 import { audioService } from './features/chess/services/audioService';
@@ -38,6 +41,26 @@ export default function App() {
   const activeColor = useChessStore((state) => state.activeColor);
   const moveHistory = useChessStore((state) => state.moveHistory);
   const capturedPieces = useChessStore((state) => state.capturedPieces);
+  
+  // Calculate material score dynamically
+  const materialScores = useMemo(() => {
+    const getPieceValue = (type: string) => {
+      switch (type) {
+        case 'pawn': return 1;
+        case 'knight': return 3;
+        case 'bishop': return 3;
+        case 'rook': return 5;
+        case 'queen': return 9;
+        default: return 0;
+      }
+    };
+    const whiteValue = capturedPieces.white.reduce((acc, p) => acc + getPieceValue(p.type), 0);
+    const blackValue = capturedPieces.black.reduce((acc, p) => acc + getPieceValue(p.type), 0);
+    return {
+      whiteLead: whiteValue > blackValue ? whiteValue - blackValue : 0,
+      blackLead: blackValue > whiteValue ? blackValue - whiteValue : 0,
+    };
+  }, [capturedPieces]);
   const isCheck = useChessStore((state) => state.isCheck);
   const isCheckmate = useChessStore((state) => state.isCheckmate);
   const isStalemate = useChessStore((state) => state.isStalemate);
@@ -67,6 +90,17 @@ export default function App() {
   const setSoundCaptureEnabled = useChessStore((state) => state.setSoundCaptureEnabled);
   const setSoundAlertEnabled = useChessStore((state) => state.setSoundAlertEnabled);
   const setBoardTheme = useChessStore((state) => state.setBoardTheme);
+  const hintMove = useChessStore((state) => state.hintMove);
+  const setHintMove = useChessStore((state) => state.setHintMove);
+
+  const handleRequestHint = () => {
+    if (isCheckmate || isStalemate || winner || gameEndReason) return;
+    const bestMove = findBestMove(board, activeColor, moveHistory);
+    if (bestMove) {
+      setHintMove(bestMove);
+      audioService.playMove();
+    }
+  };
 
   // Local component states
   const [isFlipped, setIsFlipped] = useState(false);
@@ -76,6 +110,23 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [opponentJoined, setOpponentJoined] = useState(false);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
+  
+  // Tabbed sidebar selector
+  const [sidebarTab, setSidebarTab] = useState<'moves' | 'analysis'>('moves');
+
+  // AI Thinking state
+  const [aiIsThinking, setAiIsThinking] = useState(false);
+
+  // Position Analysis states
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [positionAnalysis, setPositionAnalysis] = useState<{
+    score: number;
+    summary: string;
+    whitePlan: string;
+    blackPlan: string;
+    lastMoveCommentary: string;
+  } | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Simple offline timers for premium representation
   const [whiteTime, setWhiteTime] = useState(600); // 10 minutes
@@ -171,6 +222,75 @@ export default function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, [activeColor, isCheckmate, isStalemate, winner, gameEndReason, syncGameState]);
+
+  // AI Turn triggering logic
+  const aiDifficulty = useChessStore((state) => state.aiDifficulty);
+  const aiPlayerColor = useChessStore((state) => state.aiPlayerColor);
+
+  useEffect(() => {
+    if (gameMode !== 'ai' || isCheckmate || isStalemate || winner || gameEndReason) return;
+    if (activeColor === aiPlayerColor) return;
+
+    let active = true;
+    setAiIsThinking(true);
+
+    const timer = setTimeout(() => {
+      if (!active) return;
+      const currentStore = useChessStore.getState();
+      const bestMove = findBestMove(
+        currentStore.board,
+        currentStore.activeColor,
+        currentStore.moveHistory,
+        currentStore.aiDifficulty
+      );
+
+      if (bestMove) {
+        currentStore.movePiece(bestMove.from, bestMove.to);
+      }
+      setAiIsThinking(false);
+    }, 800 + Math.random() * 600); // Realistic 0.8 - 1.4 second delay for organic play feel
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [gameMode, activeColor, aiPlayerColor, aiDifficulty, isCheckmate, isStalemate, winner, gameEndReason]);
+
+  // Clean stale position analysis when the board moves
+  useEffect(() => {
+    setPositionAnalysis(null);
+    setAnalysisError(null);
+  }, [moveHistory.length]);
+
+  const handleAnalyzePosition = async () => {
+    try {
+      setAnalysisLoading(true);
+      setAnalysisError(null);
+      const currentStore = useChessStore.getState();
+
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          board: currentStore.board,
+          moveHistory: currentStore.moveHistory,
+          activeColor: currentStore.activeColor,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to compile analysis for this position.");
+      }
+
+      const data = await res.json();
+      setPositionAnalysis(data);
+    } catch (err: any) {
+      console.error("Gemini Analysis Error:", err);
+      setAnalysisError(err.message || "Failed to establish contact with the Coaching Assistant.");
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
 
   // Keyboard navigation for game history (undo/redo)
   useEffect(() => {
@@ -382,6 +502,24 @@ export default function App() {
           black: { name: 'Guest (Black)', elo: '...', avatar: '⏳' },
         };
       }
+    } else if (gameMode === 'ai') {
+      const aiPersona = 
+        aiDifficulty === 'easy' ? { name: 'Noob Knight (Easy)', elo: 'ELO: 800', avatar: '♟️' } :
+        aiDifficulty === 'medium' ? { name: 'Savant Spark (Medium)', elo: 'ELO: 1500', avatar: '🤖' } :
+        aiDifficulty === 'hard' ? { name: 'Grandmaster (Hard)', elo: 'ELO: 2100', avatar: '🧠' } :
+        { name: 'Gemini Oracle (Genius)', elo: 'ELO: 2800+', avatar: '✨' };
+
+      if (aiPlayerColor === 'white') {
+        return {
+          white: { name: 'You (White)', elo: 'ELO: 1500', avatar: '👤' },
+          black: aiPersona,
+        };
+      } else {
+        return {
+          white: aiPersona,
+          black: { name: 'You (Black)', elo: 'ELO: 1500', avatar: '👤' },
+        };
+      }
     } else {
       // Local play
       return {
@@ -585,7 +723,14 @@ export default function App() {
             <h2 className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold">Capture Advantage</h2>
             <div className="space-y-4">
               <div className="flex flex-col gap-2">
-                <span className="text-[11px] text-white/50">White Material (Captured Black Pieces)</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-white/50">White Material (Captured Black)</span>
+                  {materialScores.whiteLead > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold animate-in zoom-in duration-200">
+                      +{materialScores.whiteLead}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-1 bg-[#141414] p-2.5 rounded-lg border border-white/5 min-h-[44px] items-center">
                   {capturedPieces.white.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
@@ -593,18 +738,13 @@ export default function App() {
                         {capturedPieces.white.map((p) => (
                           <motion.span 
                             key={p.id} 
-                            initial={{ scale: 0, opacity: 0, rotate: -25, y: 5 }}
-                            animate={{ 
-                              scale: [0, 1.35, 0.95, 1],
-                              opacity: 1,
-                              rotate: [20, -12, 6, 0],
-                              x: [0, -3, 3, -1.5, 1.5, 0],
-                              y: [5, -2, 0]
-                            }}
-                            exit={{ scale: 0, opacity: 0, rotate: 15, transition: { duration: 0.2 } }}
+                            initial={{ scale: 0.2, opacity: 0, rotate: -45 }}
+                            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                            exit={{ scale: 0, opacity: 0, rotate: 30 }}
                             transition={{ 
-                              duration: 0.5,
-                              ease: "easeOut"
+                              type: "spring",
+                              stiffness: 280,
+                              damping: 16
                             }}
                             className="text-lg text-slate-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)] inline-block select-none"
                             title={`Captured Black ${p.type}`}
@@ -621,7 +761,14 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-[11px] text-white/50">Black Material (Captured White Pieces)</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-white/50">Black Material (Captured White)</span>
+                  {materialScores.blackLead > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold animate-in zoom-in duration-200">
+                      +{materialScores.blackLead}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-1 bg-[#141414] p-2.5 rounded-lg border border-white/5 min-h-[44px] items-center">
                   {capturedPieces.black.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
@@ -629,18 +776,13 @@ export default function App() {
                         {capturedPieces.black.map((p) => (
                           <motion.span 
                             key={p.id} 
-                            initial={{ scale: 0, opacity: 0, rotate: -25, y: 5 }}
-                            animate={{ 
-                              scale: [0, 1.35, 0.95, 1],
-                              opacity: 1,
-                              rotate: [20, -12, 6, 0],
-                              x: [0, -3, 3, -1.5, 1.5, 0],
-                              y: [5, -2, 0]
-                            }}
-                            exit={{ scale: 0, opacity: 0, rotate: 15, transition: { duration: 0.2 } }}
+                            initial={{ scale: 0.2, opacity: 0, rotate: -45 }}
+                            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                            exit={{ scale: 0, opacity: 0, rotate: 30 }}
                             transition={{ 
-                              duration: 0.5,
-                              ease: "easeOut"
+                              type: "spring",
+                              stiffness: 280,
+                              damping: 16
                             }}
                             className="text-lg text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] inline-block select-none"
                             title={`Captured White ${p.type}`}
@@ -684,9 +826,6 @@ export default function App() {
               <div>
                 <div className="text-sm font-semibold text-white/90 flex items-center gap-2">
                   {isFlipped ? whitePlayer.name : blackPlayer.name}
-                  {aiIsThinking && gameMode === 'ai' && activeColor === aiColor && (isFlipped ? whitePlayer.avatar : blackPlayer.avatar) === '🤖' && (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  )}
                 </div>
                 <div className="text-[11px] text-white/40 tracking-wider font-mono">
                   {isFlipped ? whitePlayer.elo : blackPlayer.elo}
@@ -698,6 +837,18 @@ export default function App() {
               {formatTime(isFlipped ? whiteTime : blackTime)}
             </div>
           </div>
+
+          {/* AI Thinking Status Bar */}
+          {aiIsThinking && (
+            <div className="w-full max-w-2xl mb-4 px-4 py-2.5 rounded-lg border bg-violet-500/10 border-violet-500/20 text-violet-200 flex items-center justify-between transition-all duration-300 shadow-md animate-pulse">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 text-violet-400 animate-spin" />
+                <span className="text-xs font-semibold uppercase tracking-wider font-mono">
+                  AI Opponent is analyzing calculation lines...
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Active game alerts (Check, Checkmate, Stalemate) */}
           {(isCheck || isCheckmate || isStalemate) && (
@@ -794,7 +945,7 @@ export default function App() {
                 }}
                 className={`py-2 text-[10px] uppercase font-bold tracking-wider rounded-md transition-all cursor-pointer ${
                   gameMode === 'ai'
-                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20 shadow-sm'
+                    ? 'bg-violet-500/15 text-violet-400 border border-violet-500/20 shadow-sm'
                     : 'text-white/40 hover:text-white/70'
                 }`}
               >
@@ -825,7 +976,7 @@ export default function App() {
                 <button
                   onClick={handleOfferDraw}
                   className="py-2.5 bg-white/5 hover:bg-white/10 text-white/80 hover:text-amber-400 border border-white/10 rounded-lg text-[10px] uppercase font-bold tracking-wider transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5 font-sans"
-                  title="Offer a draw to the opponent or AI"
+                  title="Offer a draw to the opponent"
                 >
                   <Users className="w-3.5 h-3.5" />
                   Offer Draw
@@ -853,86 +1004,88 @@ export default function App() {
                 <p className="text-xs text-white/40 leading-relaxed">
                   Pass and play chess on the same device. Standard competition rules and material metrics are tracked in real-time.
                 </p>
-                <button
-                  onClick={handleAnalyzeGame}
-                  className="w-full py-2.5 bg-amber-500/10 hover:bg-amber-500/15 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] uppercase font-bold tracking-widest transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Analyze Position with Gemini
-                </button>
               </div>
             )}
 
             {gameMode === 'ai' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-                    <Brain className="w-4 h-4" />
-                    Gemini AI Companion
+                  <div className="text-xs font-semibold text-violet-400 flex items-center gap-1.5">
+                    <Swords className="w-4 h-4" />
+                    AI Opponent Setup
                   </div>
-                  {aiIsThinking && (
-                    <span className="flex items-center gap-1.5 text-[10px] text-amber-400 font-medium animate-pulse">
-                      <Loader2 className="w-3 h-3 animate-spin animate-infinite" />
-                      Thinking...
-                    </span>
-                  )}
                 </div>
 
-                {/* AI Configuration Selection */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-mono uppercase text-white/30">Your Color</label>
-                    <select
-                      value={aiColor === 'black' ? 'white' : 'black'}
-                      onChange={(e) => {
-                        const wantedUserColor = e.target.value as 'white' | 'black';
-                        const wantedAiColor = wantedUserColor === 'white' ? 'black' : 'white';
-                        setAiConfig({ color: wantedAiColor });
-                        if (wantedAiColor === 'white' && moveHistory.length === 0) {
+                <div className="space-y-3.5 bg-[#151515] p-3 rounded-lg border border-white/5">
+                  {/* Difficulty Selection */}
+                  <div>
+                    <label className="text-[9px] uppercase tracking-wider text-white/40 block mb-1 font-mono font-bold">AI Engine level</label>
+                    <div className="grid grid-cols-4 gap-1 bg-black/40 p-1 rounded-md">
+                      {(['easy', 'medium', 'hard', 'gemini'] as const).map((level) => (
+                        <button
+                          key={level}
+                          onClick={() => useChessStore.getState().setAiDifficulty(level)}
+                          className={`py-1 text-[9px] uppercase font-bold rounded transition-all cursor-pointer ${
+                            aiDifficulty === level
+                              ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                              : 'text-white/40 hover:text-white/70'
+                          }`}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Play as Color Selection */}
+                  <div>
+                    <label className="text-[9px] uppercase tracking-wider text-white/40 block mb-1 font-mono font-bold">Play as color</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        onClick={() => {
+                          useChessStore.getState().setAiPlayerColor('white');
+                          setIsFlipped(false);
+                          resetGame();
+                        }}
+                        className={`py-1 px-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all cursor-pointer text-center ${
+                          aiPlayerColor === 'white'
+                            ? 'bg-white text-zinc-950 border-white'
+                            : 'bg-white/5 text-white/60 border-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        White (First)
+                      </button>
+                      <button
+                        onClick={() => {
+                          useChessStore.getState().setAiPlayerColor('black');
                           setIsFlipped(true);
-                        } else {
-                          setIsFlipped(wantedUserColor === 'black');
-                        }
-                      }}
-                      className="w-full bg-[#161616] border border-white/5 rounded px-2.5 py-1.5 text-xs text-white/80 focus:outline-none focus:border-amber-500/30 font-semibold cursor-pointer"
-                    >
-                      <option value="white">White</option>
-                      <option value="black">Black</option>
-                    </select>
+                          resetGame();
+                        }}
+                        className={`py-1 px-2 rounded text-[9px] font-bold uppercase tracking-wider border transition-all cursor-pointer text-center ${
+                          aiPlayerColor === 'black'
+                            ? 'bg-zinc-800 text-white border-zinc-700'
+                            : 'bg-white/5 text-white/60 border-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        Black (Second)
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-mono uppercase text-white/30">Difficulty</label>
-                    <select
-                      value={aiDifficulty}
-                      onChange={(e) => setAiConfig({ difficulty: e.target.value as 'casual' | 'master' })}
-                      className="w-full bg-[#161616] border border-white/5 rounded px-2.5 py-1.5 text-xs text-white/80 focus:outline-none focus:border-amber-500/30 font-semibold cursor-pointer"
-                    >
-                      <option value="casual">Casual (Club)</option>
-                      <option value="master">Grandmaster</option>
-                    </select>
-                  </div>
+                  <button
+                    onClick={() => {
+                      resetGame();
+                      if (aiPlayerColor === 'black') {
+                        setIsFlipped(true);
+                      } else {
+                        setIsFlipped(false);
+                      }
+                    }}
+                    className="w-full py-1.5 bg-violet-600/20 hover:bg-violet-600/35 text-violet-300 border border-violet-500/30 rounded text-[9px] uppercase font-bold tracking-widest transition-all cursor-pointer active:scale-95 text-center"
+                  >
+                    Restart match
+                  </button>
                 </div>
-
-                {/* AI Commentary Bubble */}
-                <div className="bg-[#181818] border border-white/5 rounded-xl p-3 relative">
-                  <div className="text-[9px] font-mono uppercase text-amber-400/65 mb-1 flex items-center gap-1">
-                    <Brain className="w-3 h-3" />
-                    Gemini Live Thoughts
-                  </div>
-                  <p className="text-xs text-white/80 italic leading-relaxed">
-                    {aiCommentary || "Good luck! Make your move, and I'll respond strategically."}
-                  </p>
-                  <div className="absolute -bottom-1.5 left-4 w-3 h-3 bg-[#181818] border-r border-b border-white/5 rotate-45" />
-                </div>
-
-                <button
-                  onClick={handleAnalyzeGame}
-                  className="w-full py-2.5 bg-amber-500/10 hover:bg-amber-500/15 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] uppercase font-bold tracking-widest transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Analyze Position with Gemini
-                </button>
               </div>
             )}
 
@@ -1020,16 +1173,6 @@ export default function App() {
                         Exit
                       </button>
                     </div>
-
-                    {opponentJoined && (
-                      <button
-                        onClick={handleAnalyzeGame}
-                        className="w-full mt-1.5 py-2.5 bg-amber-500/10 hover:bg-amber-500/15 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] uppercase font-bold tracking-widest transition-colors cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Analyze Position with Gemini
-                      </button>
-                    )}
                   </div>
                 )}
 
@@ -1042,182 +1185,224 @@ export default function App() {
             )}
           </div>
 
-          {/* Collapsible/Scrollable Analysis Panel or Move History */}
-          <div className="flex-1 min-h-[220px] flex flex-col overflow-hidden">
-            {showAnalysis ? (
-              <div className="flex-1 flex flex-col overflow-hidden bg-[#121212]/50 border-b border-white/5">
-                <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#141414]">
-                  <div className="flex items-center gap-2 text-amber-400 font-display text-[10px] font-bold uppercase tracking-wider">
-                    <Sparkles className="w-4 h-4 animate-pulse" />
-                    Gemini Game Analysis
-                  </div>
-                  <button
-                    onClick={() => setShowAnalysis(false)}
-                    className="text-[9px] uppercase tracking-wider font-bold text-white/40 hover:text-white cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
+          {/* Scrollable Move History & AI Coach Tab container */}
+          <div className="flex-1 min-h-[250px] flex flex-col overflow-hidden">
+            {/* Tab header */}
+            <div className="flex border-b border-white/5 bg-[#121212] shrink-0">
+              <button
+                onClick={() => setSidebarTab('moves')}
+                className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest transition-all cursor-pointer border-b-2 text-center ${
+                  sidebarTab === 'moves'
+                    ? 'border-white text-white bg-white/[0.02]'
+                    : 'border-transparent text-white/40 hover:text-white/70'
+                }`}
+              >
+                Move History
+              </button>
+              <button
+                onClick={() => setSidebarTab('analysis')}
+                className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest transition-all cursor-pointer border-b-2 text-center flex items-center justify-center gap-1.5 ${
+                  sidebarTab === 'analysis'
+                    ? 'border-violet-500 text-violet-400 bg-violet-500/[0.02]'
+                    : 'border-transparent text-white/40 hover:text-white/70'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-pulse text-violet-400" />
+                AI Coach
+              </button>
+            </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs">
-                  {analysisLoading ? (
-                    <div className="h-full flex flex-col items-center justify-center py-12 gap-3">
-                      <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
-                      <p className="text-xs text-white/40 italic">Gemini is compiling strategic evaluation...</p>
-                    </div>
-                  ) : analysisData ? (
-                    <div className="space-y-4">
-                      {/* Evaluation */}
-                      <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-                        <div className="font-mono text-[9px] uppercase tracking-wider text-amber-400/80 mb-1">Board Evaluation</div>
-                        <p className="text-white/90 leading-relaxed font-medium">{analysisData.evaluation}</p>
-                      </div>
-
-                      {/* Strategic Advice */}
-                      <div className="p-3 bg-[#111] rounded-lg border border-white/5">
-                        <div className="font-mono text-[9px] uppercase tracking-wider text-emerald-400/80 mb-1">Strategic Advice</div>
-                        <p className="text-white/80 leading-relaxed">{analysisData.strategicAdvice}</p>
-                      </div>
-
-                      {/* Tactical Threats */}
-                      <div className="p-3 bg-red-950/5 rounded-lg border border-red-900/10">
-                        <div className="font-mono text-[9px] uppercase tracking-wider text-red-400 mb-1">Tactical Threats</div>
-                        <p className="text-red-200/85 leading-relaxed">{analysisData.tacticalThreats}</p>
-                      </div>
-
-                      {/* Suggested Plan */}
-                      <div className="p-3 bg-amber-950/10 rounded-lg border border-amber-900/10">
-                        <div className="font-mono text-[9px] uppercase tracking-wider text-amber-400 mb-1">Suggested Plan</div>
-                        <p className="text-amber-200/85 leading-relaxed font-semibold">{analysisData.suggestedPlan}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-center text-white/20 italic py-6">No analysis data loaded.</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col overflow-hidden border-b border-white/5">
-                <div className="p-4 text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold border-b border-white/5 bg-[#121212]">
-                  Move History
-                </div>
-                <div className="flex-1 overflow-y-auto font-mono text-[13px] bg-[#0a0a0a]/20 divide-y divide-white/5">
-                  {moveHistory.length > 0 ? (
-                    moveHistory.map((move, index) => (
-                      <div key={index} className="grid grid-cols-12 px-4 py-3 bg-[#111]/10 hover:bg-white/[0.02] border-b border-white/[0.02] items-center gap-1">
-                        {/* Move Number & Turn indicator */}
-                        <div className="col-span-3 flex items-center gap-1.5">
-                          <span className="text-[11px] text-white/20 font-bold">
-                            {Math.floor(index / 2) + 1}.{index % 2 === 0 ? '' : '..'}
-                          </span>
-                          <span className={`w-2 h-2 rounded-full ${move.piece.color === 'white' ? 'bg-white/80' : 'bg-zinc-700'}`} />
-                        </div>
-
-                        {/* Standard Notation and Symbolic Notation */}
-                        <div className="col-span-5 flex items-center gap-1.5 overflow-hidden">
-                          <span className="text-white/90 font-semibold tracking-tight text-[12px] truncate">
-                            {move.notation}
-                          </span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-sans select-none flex items-center shrink-0 ${
-                            move.piece.color === 'white' 
-                              ? 'bg-white/5 border-white/10 text-white/70' 
-                              : 'bg-[#151515] border-white/5 text-zinc-400'
-                          }`}>
-                            <span className="font-mono">{move.symbolicNotation}</span>
-                          </span>
-                        </div>
-
-                        {/* Capture Indicator & Move Time */}
-                        <div className="col-span-4 flex items-center justify-end gap-1.5">
-                          {move.capturedPiece && (
-                            <span 
-                              className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded font-sans border shrink-0 ${
-                                move.capturedPiece.color === 'white'
-                                  ? 'bg-white/10 border-white/15 text-white/90'
-                                  : 'bg-zinc-950/40 border-zinc-900/30 text-zinc-400'
-                              }`}
-                              title={`Captured ${move.capturedPiece.color} ${move.capturedPiece.type}`}
-                            >
-                              <span className="text-[9px] uppercase tracking-wide opacity-50 font-bold font-mono">x</span>
-                              <span className="text-xs leading-none">
-                                {move.capturedPiece.type === 'pawn' ? (move.capturedPiece.color === 'white' ? '♙' : '♟') :
-                                 move.capturedPiece.type === 'knight' ? (move.capturedPiece.color === 'white' ? '♘' : '♞') :
-                                 move.capturedPiece.type === 'bishop' ? (move.capturedPiece.color === 'white' ? '♗' : '♝') :
-                                 move.capturedPiece.type === 'rook' ? (move.capturedPiece.color === 'white' ? '♖' : '♜') :
-                                 move.capturedPiece.type === 'queen' ? (move.capturedPiece.color === 'white' ? '♕' : '♛') : '♔'}
-                              </span>
+            {/* Tab content */}
+            <div className="flex-1 flex flex-col overflow-hidden border-b border-white/5">
+              {sidebarTab === 'moves' ? (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto font-mono text-[13px] bg-[#0a0a0a]/20 divide-y divide-white/5">
+                    {moveHistory.length > 0 ? (
+                      moveHistory.map((move, index) => (
+                        <div key={index} className="grid grid-cols-12 px-4 py-3 bg-[#111]/10 hover:bg-white/[0.02] border-b border-white/[0.02] items-center gap-1">
+                          {/* Move Number & Turn indicator */}
+                          <div className="col-span-3 flex items-center gap-1.5">
+                            <span className="text-[11px] text-white/20 font-bold">
+                              {Math.floor(index / 2) + 1}.{index % 2 === 0 ? '' : '..'}
                             </span>
-                          )}
-                          <span className="text-[9px] text-white/30 italic font-mono truncate shrink-0">
-                            {new Date(move.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            <span className={`w-2 h-2 rounded-full ${move.piece.color === 'white' ? 'bg-white/80' : 'bg-zinc-700'}`} />
+                          </div>
+
+                          {/* Standard Notation and Symbolic Notation */}
+                          <div className="col-span-5 flex items-center gap-1.5 overflow-hidden">
+                            <span className="text-white/90 font-semibold tracking-tight text-[12px] truncate">
+                              {move.notation}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-sans select-none flex items-center shrink-0 ${
+                              move.piece.color === 'white' 
+                                ? 'bg-white/5 border-white/10 text-white/70' 
+                                : 'bg-[#151515] border-white/5 text-zinc-400'
+                            }`}>
+                              <span className="font-mono">{move.symbolicNotation}</span>
+                            </span>
+                          </div>
+
+                          {/* Capture Indicator & Move Time */}
+                          <div className="col-span-4 flex items-center justify-end gap-1.5">
+                            {move.capturedPiece && (
+                              <span 
+                                className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded font-sans border shrink-0 ${
+                                  move.capturedPiece.color === 'white'
+                                    ? 'bg-white/10 border-white/15 text-white/90'
+                                    : 'bg-zinc-950/40 border-zinc-900/30 text-zinc-400'
+                                }`}
+                                title={`Captured ${move.capturedPiece.color} ${move.capturedPiece.type}`}
+                              >
+                                <span className="text-[9px] uppercase tracking-wide opacity-50 font-bold font-mono">x</span>
+                                <span className="text-xs leading-none">
+                                  {move.capturedPiece.type === 'pawn' ? (move.capturedPiece.color === 'white' ? '♙' : '♟') :
+                                   move.capturedPiece.type === 'knight' ? (move.capturedPiece.color === 'white' ? '♘' : '♞') :
+                                   move.capturedPiece.type === 'bishop' ? (move.capturedPiece.color === 'white' ? '♗' : '♝') :
+                                   move.capturedPiece.type === 'rook' ? (move.capturedPiece.color === 'white' ? '♖' : '♜') :
+                                   move.capturedPiece.type === 'queen' ? (move.capturedPiece.color === 'white' ? '♕' : '♛') : '♔'}
+                                </span>
+                              </span>
+                            )}
+                            <span className="text-[9px] text-white/30 italic font-mono truncate shrink-0">
+                              {new Date(move.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-6 text-center text-xs text-white/20 italic my-auto">
+                        No moves played yet.
+                        <p className="text-[10px] not-italic text-white/30 mt-1">Select a piece and plan your play</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#090909]/40">
+                  {/* Analysis content */}
+                  {!positionAnalysis && !analysisLoading && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-4 space-y-4">
+                      <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
+                        <Sparkles className="w-4.5 h-4.5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Gemini Chess Coach</h4>
+                        <p className="text-[10px] text-white/40 mt-1 max-w-[220px] mx-auto leading-relaxed">
+                          Request instant visual evaluation, strategic commentary, and tactical insights.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleAnalyzePosition}
+                        className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded text-[10px] uppercase font-bold tracking-wider transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md mx-auto"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Analyze Position
+                      </button>
+                    </div>
+                  )}
+
+                  {analysisLoading && (
+                    <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
+                      <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                      <div>
+                        <span className="text-xs font-semibold text-violet-300 font-mono tracking-wider uppercase animate-pulse block">Analyzing lines...</span>
+                        <p className="text-[10px] text-white/40 mt-1.5 max-w-[200px] leading-relaxed italic mx-auto">
+                          Analyzing pawn breaks, king safety, and structural imbalances...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {analysisError && (
+                    <div className="p-3 bg-red-950/20 border border-red-500/20 text-red-200 rounded text-center text-[11px] leading-relaxed">
+                      <p className="font-bold mb-1">Coach Error</p>
+                      {analysisError}
+                      <button
+                        onClick={handleAnalyzePosition}
+                        className="mt-2 block w-full py-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-300 border border-red-500/25 rounded font-mono font-bold text-[9px] uppercase tracking-wider cursor-pointer"
+                      >
+                        Retry Analysis
+                      </button>
+                    </div>
+                  )}
+
+                  {positionAnalysis && (
+                    <div className="space-y-4 animate-in fade-in duration-300 text-left">
+                      {/* Evaluation meter */}
+                      <div className="bg-[#151515] p-3 rounded-lg border border-white/5 space-y-2">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-white/40 font-bold uppercase tracking-wider font-mono">Engine score</span>
+                          <span className={`font-bold font-mono px-1.5 py-0.5 rounded ${
+                            positionAnalysis.score > 0.5 ? 'bg-emerald-500/15 text-emerald-400' :
+                            positionAnalysis.score < -0.5 ? 'bg-red-500/15 text-red-400' :
+                            'bg-white/5 text-white/60'
+                          }`}>
+                            {positionAnalysis.score > 0 ? '+' : ''}{positionAnalysis.score.toFixed(1)}
                           </span>
                         </div>
+                        {/* Interactive gauge */}
+                        <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden flex">
+                          <div 
+                            className="bg-zinc-700 transition-all duration-500" 
+                            style={{ width: `${Math.max(5, Math.min(95, 50 - positionAnalysis.score * 10))}%` }} 
+                          />
+                          <div 
+                            className="bg-white transition-all duration-500 flex-1" 
+                          />
+                        </div>
+                        <div className="flex justify-between text-[8px] font-mono text-white/30">
+                          <span>Black Adv.</span>
+                          <span>Equal</span>
+                          <span>White Adv.</span>
+                        </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-6 text-center text-xs text-white/20 italic my-auto">
-                      No moves played yet.
-                      <p className="text-[10px] not-italic text-white/30 mt-1">Select a piece and plan your play</p>
+
+                      {/* Coach comment */}
+                      <div className="bg-[#151515] p-3 rounded-lg border border-white/5 space-y-1.5">
+                        <div className="text-[9px] uppercase tracking-wider text-violet-400 font-bold font-mono">Coach Summary</div>
+                        <p className="text-xs text-white/80 leading-relaxed font-sans">{positionAnalysis.summary}</p>
+                      </div>
+
+                      {/* Last move comments */}
+                      {positionAnalysis.lastMoveCommentary && (
+                        <div className="bg-violet-950/10 border border-violet-500/10 p-3 rounded-lg space-y-1.5">
+                          <div className="text-[9px] uppercase tracking-wider text-violet-300 font-bold font-mono">Tactical Insight</div>
+                          <p className="text-xs text-white/85 leading-relaxed font-sans italic">"{positionAnalysis.lastMoveCommentary}"</p>
+                        </div>
+                      )}
+
+                      {/* Plans */}
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="bg-[#151515] p-3 rounded-lg border border-white/5 space-y-1.5 text-left">
+                          <div className="text-[9px] uppercase tracking-wider text-white/60 font-bold font-mono flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                            White's Campaign
+                          </div>
+                          <p className="text-xs text-white/70 leading-relaxed font-sans">{positionAnalysis.whitePlan}</p>
+                        </div>
+                        <div className="bg-[#151515] p-3 rounded-lg border border-white/5 space-y-1.5 text-left">
+                          <div className="text-[9px] uppercase tracking-wider text-white/60 font-bold font-mono flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                            Black's Campaign
+                          </div>
+                          <p className="text-xs text-white/70 leading-relaxed font-sans">{positionAnalysis.blackPlan}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleAnalyzePosition}
+                        className="w-full py-2 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 rounded text-[9px] uppercase font-bold tracking-widest transition-all cursor-pointer text-center"
+                      >
+                        Recalculate Analysis
+                      </button>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Engineering Phase Roadmap Checklist */}
-          <div className="p-5 max-h-[180px] overflow-y-auto flex flex-col gap-3 shrink-0 border-b border-white/5">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-amber-400" />
-              <h3 className="font-display text-xs font-semibold text-white/90">
-                Engineering Phases
-              </h3>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              {DEVELOPMENT_PHASES.map((phase) => (
-                <div
-                  key={phase.num}
-                  className={`
-                    flex items-center justify-between px-3.5 py-1.5 rounded-xl border text-[10px] font-sans transition-all
-                    ${
-                      phase.status === 'completed'
-                        ? 'bg-emerald-950/10 border-emerald-500/20 text-emerald-300'
-                        : 'bg-white/[0.02] border-white/5 text-white/40'
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`
-                        w-4 h-4 rounded-full flex items-center justify-center font-mono text-[9px] font-bold border
-                        ${
-                          phase.status === 'completed'
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                            : 'bg-white/5 border-white/10 text-white/30'
-                        }
-                      `}
-                    >
-                      {phase.num}
-                    </span>
-                    <span className="font-medium">{phase.title}</span>
-                  </div>
-                  <span
-                    className={`
-                      font-mono text-[8px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded
-                      ${
-                        phase.status === 'completed'
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : 'bg-white/5 text-white/30'
-                      }
-                    `}
-                  >
-                    {phase.status}
-                  </span>
-                </div>
-              ))}
+              )}
             </div>
           </div>
+
+
 
           {/* Chess Board Theme Switcher */}
           <div className="p-4 border-t border-white/5 bg-[#141414]/20 shrink-0">
@@ -1257,7 +1442,7 @@ export default function App() {
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <div className="flex gap-4">
+            <div className="flex gap-4 items-center">
               <button 
                 onClick={undo}
                 disabled={moveHistory.length === 0}
@@ -1265,6 +1450,24 @@ export default function App() {
               >
                 UNDO
               </button>
+
+              <button
+                onClick={handleRequestHint}
+                disabled={isCheckmate || isStalemate || winner || !!gameEndReason}
+                className={`
+                  flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider font-bold transition-all cursor-pointer px-2.5 py-1 rounded border active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed
+                  ${
+                    hintMove 
+                      ? 'bg-violet-500/10 hover:bg-violet-500/25 text-violet-400 border-violet-500/35' 
+                      : 'bg-white/5 hover:bg-white/10 text-white/70 border-white/10'
+                  }
+                `}
+                title="Highlight the engine's recommended best move for this position"
+              >
+                <Lightbulb className={`w-3.5 h-3.5 ${hintMove ? 'text-violet-400 fill-violet-400/20' : 'text-white/60'}`} />
+                <span>HINT</span>
+              </button>
+
               <button 
                 onClick={redo}
                 disabled={redoHistory.length === 0}

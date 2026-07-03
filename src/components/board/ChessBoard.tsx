@@ -13,6 +13,17 @@ export default function ChessBoard({ isFlipped = false }: ChessBoardProps) {
   const selectedSquare = useChessStore((state) => state.selectedSquare);
   const moveHistory = useChessStore((state) => state.moveHistory);
   const { validMoves } = useValidMoves();
+  const boardTheme = useChessStore((state) => state.boardTheme);
+  const hintMove = useChessStore((state) => state.hintMove);
+
+  // Dynamic premium darker accent borders matching each color template
+  const borderColors = {
+    classic: 'border-[#312215] bg-[#312215]',
+    ocean: 'border-[#15202b] bg-[#15202b]',
+    forest: 'border-[#222e1b] bg-[#222e1b]',
+  };
+
+  const currentBorder = borderColors[boardTheme as 'classic' | 'ocean' | 'forest'] || borderColors.classic;
 
   const pendingPromotion = useChessStore((state) => state.pendingPromotion);
   const setPendingPromotion = useChessStore((state) => state.setPendingPromotion);
@@ -78,7 +89,7 @@ export default function ChessBoard({ isFlipped = false }: ChessBoardProps) {
   return (
     <div
       id="chess-board-wrapper"
-      className="w-full max-w-lg aspect-square bg-[#1a1a1a] p-0.5 shadow-[0_24px_64px_rgba(0,0,0,0.85)] border-[12px] border-[#1a1a1a] relative rounded-xl"
+      className={`w-full max-w-lg aspect-square p-0.5 shadow-[0_24px_64px_rgba(0,0,0,0.85)] border-[12px] relative rounded-xl transition-all duration-300 ${currentBorder}`}
     >
       <div
         id="chess-board-grid"
@@ -104,6 +115,16 @@ export default function ChessBoard({ isFlipped = false }: ChessBoardProps) {
               lastMove.to.row === row &&
               lastMove.to.col === col;
 
+            const isHintSource =
+              hintMove !== null &&
+              hintMove.from.row === row &&
+              hintMove.from.col === col;
+
+            const isHintDestination =
+              hintMove !== null &&
+              hintMove.to.row === row &&
+              hintMove.to.col === col;
+
             return (
               <BoardSquare
                 key={`${row}-${col}`}
@@ -114,6 +135,8 @@ export default function ChessBoard({ isFlipped = false }: ChessBoardProps) {
                 isMoveCandidate={isMoveCandidate}
                 isLastMoveSource={isLastMoveSource}
                 isLastMoveDestination={isLastMoveDestination}
+                isHintSource={isHintSource}
+                isHintDestination={isHintDestination}
               />
             );
           })

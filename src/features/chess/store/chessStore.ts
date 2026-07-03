@@ -6,7 +6,9 @@ import { isKingInCheck, calculateLegalMoves } from '../engine/moveValidator';
 
 interface ChessStore extends GameState {
   redoHistory: Move[];
-  gameMode: 'local' | 'multiplayer';
+  gameMode: 'local' | 'ai' | 'multiplayer';
+  aiDifficulty: 'easy' | 'medium' | 'hard' | 'gemini';
+  aiPlayerColor: 'white' | 'black';
   multiplayerRoomId: string | null;
   multiplayerRole: 'white' | 'black' | null;
   soundEnabled: boolean;
@@ -15,6 +17,7 @@ interface ChessStore extends GameState {
   soundAlertEnabled: boolean;
   boardTheme: BoardTheme;
   pendingPromotion: PromotionState | null;
+  hintMove: { from: SquareCoordinates; to: SquareCoordinates } | null;
 
   resetGame: () => void;
   selectSquare: (coords: SquareCoordinates | null) => void;
@@ -22,7 +25,9 @@ interface ChessStore extends GameState {
   setPendingPromotion: (pending: PromotionState | null) => void;
   undo: () => void;
   redo: () => void;
-  setGameMode: (mode: 'local' | 'multiplayer') => void;
+  setGameMode: (mode: 'local' | 'ai' | 'multiplayer') => void;
+  setAiDifficulty: (difficulty: 'easy' | 'medium' | 'hard' | 'gemini') => void;
+  setAiPlayerColor: (color: 'white' | 'black') => void;
   setMultiplayerState: (state: { roomId: string | null; role: 'white' | 'black' | null }) => void;
   syncGameState: (state: Partial<GameState>) => void;
   setSoundEnabled: (enabled: boolean) => void;
@@ -30,6 +35,7 @@ interface ChessStore extends GameState {
   setSoundCaptureEnabled: (enabled: boolean) => void;
   setSoundAlertEnabled: (enabled: boolean) => void;
   setBoardTheme: (theme: BoardTheme) => void;
+  setHintMove: (move: { from: SquareCoordinates; to: SquareCoordinates } | null) => void;
 }
 
 const initialGameState: GameState = {
@@ -155,6 +161,8 @@ export const useChessStore = create<ChessStore>((set) => {
     ...initialGameState,
     redoHistory: [],
     gameMode: 'local',
+    aiDifficulty: 'medium',
+    aiPlayerColor: 'white',
     multiplayerRoomId: null,
     multiplayerRole: null,
     soundEnabled: soundEnabledInit,
@@ -163,6 +171,7 @@ export const useChessStore = create<ChessStore>((set) => {
     soundAlertEnabled: soundAlertEnabledInit,
     boardTheme: boardThemeInit,
     pendingPromotion: null,
+    hintMove: null,
 
     resetGame: () =>
       set((state) => ({
@@ -170,12 +179,15 @@ export const useChessStore = create<ChessStore>((set) => {
         board: generateInitialBoard(),
         redoHistory: [],
         pendingPromotion: null,
+        hintMove: null,
         gameMode: state.gameMode,
+        aiDifficulty: state.aiDifficulty,
+        aiPlayerColor: state.aiPlayerColor,
         multiplayerRoomId: state.multiplayerRoomId,
         multiplayerRole: state.multiplayerRole,
       })),
 
-  selectSquare: (coords) => set({ selectedSquare: coords }),
+  selectSquare: (coords) => set({ selectedSquare: coords, hintMove: null }),
   setPendingPromotion: (pending) => set({ pendingPromotion: pending }),
 
   movePiece: (from, to, promotionType) =>
@@ -361,6 +373,7 @@ export const useChessStore = create<ChessStore>((set) => {
         isStalemate,
         winner,
         redoHistory: [], // clear redo history on new move
+        hintMove: null,
       };
     }),
 
@@ -386,6 +399,7 @@ export const useChessStore = create<ChessStore>((set) => {
         ...reconstructed,
         moveHistory: nextMoveHistory,
         redoHistory: nextRedoHistory,
+        hintMove: null,
       };
     }),
 
@@ -413,10 +427,15 @@ export const useChessStore = create<ChessStore>((set) => {
         ...reconstructed,
         moveHistory: nextMoveHistory,
         redoHistory: nextRedoHistory,
+        hintMove: null,
       };
     }),
 
   setGameMode: (mode) => set({ gameMode: mode }),
+
+  setAiDifficulty: (difficulty) => set({ aiDifficulty: difficulty }),
+
+  setAiPlayerColor: (color) => set({ aiPlayerColor: color }),
 
   setMultiplayerState: (state) =>
     set({
@@ -470,5 +489,6 @@ export const useChessStore = create<ChessStore>((set) => {
     }
     set({ boardTheme: theme });
   },
+  setHintMove: (move) => set({ hintMove: move }),
 };
 });
