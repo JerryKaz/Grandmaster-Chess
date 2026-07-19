@@ -1,4 +1,10 @@
-#  Full-Stack Chess with AI Opponents, Multiplayer & AI Coach
+# Full-Stack Chess with AI Opponents, Multiplayer & AI Coach
+
+![Home Screen](https://github.com/user-attachments/assets/cc066f18-cd33-4132-9efa-09a1443e686f)
+
+![Game Interface](https://github.com/user-attachments/assets/3a38e4b7-541b-41f8-a732-ddc5cb032139)
+
+A state-of-the-art, visually stunning, fully-featured, and modern full-stack Chess application. This project is built using a React (Vite) + Tailwind CSS front-end and a secure Node.js + Express backend.
 
 A state-of-the-art, visually stunning, fully-featured, and modern full-stack Chess application. This project is built using a React (Vite) + Tailwind CSS front-end and a secure Node.js + Express backend. 
 
