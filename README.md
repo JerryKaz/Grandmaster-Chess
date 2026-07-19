@@ -60,7 +60,7 @@ The application incorporates a custom client-side chess rule validator, an integ
 
 ##  System Architecture & Folder Structure
 
-The code is cleanly modularized into separate areas of concern to make sure it is easy to maintain:
+The codebase is modularized cleanly into separate areas of concern to make sure it is easy to maintain and scale:
 
 ```
 ├── server.ts                       # Full-stack Express server (API endpoints & static serving)
@@ -69,19 +69,32 @@ The code is cleanly modularized into separate areas of concern to make sure it i
 ├── src/
 │   ├── main.tsx                    # React client entry point
 │   ├── App.tsx                     # Main Dashboard Layout, Sidebar Controller, and Modal Overlays
-│   ├── index.css                   # Global CSS (Imports tailwindcss & fonts)
+│   ├── index.css                   # Global CSS (tailwindcss imports & Custom font face mappings)
 │   ├── components/
-│   │   └── board/
-│   │       ├── ChessBoard.tsx      # Multi-perspective rendering grid (White/Black flip controller)
-│   │       └── BoardSquare.tsx     # Grid tile containing pieces, move highlights, and event listeners
+│   │   ├── board/
+│   │   │   ├── ChessBoard.tsx      # Multi-perspective rendering grid (White/Black flip controller)
+│   │   │   ├── BoardSquare.tsx     # Grid tile containing pieces, move highlights, and event listeners
+│   │   │   └── PromotionModal.tsx  # Select modal overlay for pawn promotion options
+│   │   ├── pieces/
+│   │   │   └── ChessPiece.tsx      # Interactive chess pieces with motion layouts & high-contrast SVGs
+│   │   └── ui/
+│   │       └── Header.tsx          # Responsive navigation header featuring Game Reset and Elos
 │   └── features/
 │       └── chess/
 │           ├── engine/
-│           │   └── chessEngine.ts  # Rules engine, move validation, minimax calculator, & opening book
+│           │   ├── chessEngine.ts  # Recursive minimax search tree calculations & positional weight evaluations
+│           │   └── moveValidator.ts # Core Chess rules engine, movement metrics, and legal status matrix
+│           ├── hooks/
+│           │   └── useValidMoves.ts # React custom hook checking active square coordinate validations
 │           ├── models/
-│           │   └── types.ts        # Shared TypeScript type interfaces, schemas, and coordinates
-│           └── store/
-│               └── chessStore.ts   # Centralized Zustand client store managing game flow
+│           │   └── types.ts        # Typed schemas, interfaces, turn trackers, and player attributes
+│           ├── services/
+│           │   └── audioService.ts  # Web Audio API synthesizers producing high-fidelity physical move/check audios
+│           ├── store/
+│           │   └── chessStore.ts   # Centralized Zustand store managing entire live match state flow
+│           └── utils/
+│               ├── initialBoard.ts # Helper establishing standard 8x8 standard starting arrays
+│               └── openingBook.ts  # Dictionary linking historical Grandmaster opening move sequences
 ```
 
 ---
@@ -169,3 +182,4 @@ npm run start
 ```
 
 ---
+
