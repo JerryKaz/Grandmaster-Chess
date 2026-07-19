@@ -48,3 +48,12 @@ export interface PromotionState {
   to: SquareCoordinates;
   color: Color;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  provider: 'google' | 'icloud' | 'email';
+  avatar: string;
+}
+

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { LayoutGroup } from 'motion/react';
 import { useChessStore } from '../../features/chess/store/chessStore';
 import { useValidMoves } from '../../features/chess/hooks/useValidMoves';
 import BoardSquare from './BoardSquare';
@@ -41,7 +42,7 @@ export default function ChessBoard({ isFlipped = false }: ChessBoardProps) {
   }, [validMoves]);
 
   // Determine row and column ordering based on perspective
-  const rowIndices = isFlipped ? Array.from({ length: 8 }, (_, i) => i) : Array.from({ length: 8 }, (_, i) => 7 - i).reverse();
+  const rowIndices = isFlipped ? Array.from({ length: 8 }, (_, i) => 7 - i) : Array.from({ length: 8 }, (_, i) => i);
   const colIndices = isFlipped ? Array.from({ length: 8 }, (_, i) => 7 - i) : Array.from({ length: 8 }, (_, i) => i);
 
   // Identify the last move
@@ -89,59 +90,62 @@ export default function ChessBoard({ isFlipped = false }: ChessBoardProps) {
   return (
     <div
       id="chess-board-wrapper"
-      className={`w-full max-w-lg aspect-square p-0.5 shadow-[0_24px_64px_rgba(0,0,0,0.85)] border-[12px] relative rounded-xl transition-all duration-300 ${currentBorder}`}
+      className={`w-full max-w-[calc(100vh-240px)] sm:max-w-lg aspect-square p-0.5 shadow-[0_24px_64px_rgba(0,0,0,0.85)] border-[6px] sm:border-[10px] md:border-[12px] relative rounded-xl transition-all duration-300 ${currentBorder}`}
     >
-      <div
-        id="chess-board-grid"
-        className="grid grid-cols-8 grid-rows-8 gap-0 overflow-hidden rounded-lg"
-      >
-        {rowIndices.map((row) =>
-          colIndices.map((col) => {
-            const piece = board[row][col];
-            const isSelected =
-              selectedSquare !== null &&
-              selectedSquare.row === row &&
-              selectedSquare.col === col;
-            
-            const isMoveCandidate = validDestinationsSet.has(`${row},${col}`);
+      <LayoutGroup id="chess-board">
+        <div
+          id="chess-board-grid"
+          className="grid grid-cols-8 grid-rows-8 gap-0 overflow-hidden rounded-lg"
+        >
+          {rowIndices.map((row) =>
+            colIndices.map((col) => {
+              const piece = board[row][col];
+              const isSelected =
+                selectedSquare !== null &&
+                selectedSquare.row === row &&
+                selectedSquare.col === col;
+              
+              const isMoveCandidate = validDestinationsSet.has(`${row},${col}`);
 
-            const isLastMoveSource =
-              lastMove !== null &&
-              lastMove.from.row === row &&
-              lastMove.from.col === col;
+              const isLastMoveSource =
+                lastMove !== null &&
+                lastMove.from.row === row &&
+                lastMove.from.col === col;
 
-            const isLastMoveDestination =
-              lastMove !== null &&
-              lastMove.to.row === row &&
-              lastMove.to.col === col;
+              const isLastMoveDestination =
+                lastMove !== null &&
+                lastMove.to.row === row &&
+                lastMove.to.col === col;
 
-            const isHintSource =
-              hintMove !== null &&
-              hintMove.from.row === row &&
-              hintMove.from.col === col;
+              const isHintSource =
+                hintMove !== null &&
+                hintMove.from.row === row &&
+                hintMove.from.col === col;
 
-            const isHintDestination =
-              hintMove !== null &&
-              hintMove.to.row === row &&
-              hintMove.to.col === col;
+              const isHintDestination =
+                hintMove !== null &&
+                hintMove.to.row === row &&
+                hintMove.to.col === col;
 
-            return (
-              <BoardSquare
-                key={`${row}-${col}`}
-                row={row}
-                col={col}
-                piece={piece}
-                isSelected={isSelected}
-                isMoveCandidate={isMoveCandidate}
-                isLastMoveSource={isLastMoveSource}
-                isLastMoveDestination={isLastMoveDestination}
-                isHintSource={isHintSource}
-                isHintDestination={isHintDestination}
-              />
-            );
-          })
-        )}
-      </div>
+              return (
+                <BoardSquare
+                  key={`${row}-${col}`}
+                  row={row}
+                  col={col}
+                  piece={piece}
+                  isSelected={isSelected}
+                  isMoveCandidate={isMoveCandidate}
+                  isLastMoveSource={isLastMoveSource}
+                  isLastMoveDestination={isLastMoveDestination}
+                  isHintSource={isHintSource}
+                  isHintDestination={isHintDestination}
+                  isFlipped={isFlipped}
+                />
+              );
+            })
+          )}
+        </div>
+      </LayoutGroup>
 
       {/* Visually stunning visual promotion selector overlay */}
       <PromotionModal

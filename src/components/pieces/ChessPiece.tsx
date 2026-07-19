@@ -41,16 +41,22 @@ export default function ChessPiece({ piece }: ChessPieceProps) {
 
   return (
     <motion.div
+      layout
       layoutId={piece.id}
       id={`piece-${piece.id}`}
       initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: 0.8, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      transition={{
+        type: 'spring',
+        stiffness: 200,
+        damping: 22,
+        mass: 0.8
+      }}
       whileHover={{ scale: 1.08 }}
       className={`
         relative flex items-center justify-center w-5/6 h-5/6 select-none cursor-grab active:cursor-grabbing
-        transition-all duration-200 rounded-full
+        rounded-full
       `}
       title={name}
       aria-label={name}

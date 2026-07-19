@@ -14,7 +14,14 @@ function getGeminiClient() {
     if (!key) {
       throw new Error("GEMINI_API_KEY is not defined");
     }
-    aiInstance = new GoogleGenAI({ apiKey: key });
+    aiInstance = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
   return aiInstance;
 }
@@ -43,9 +50,22 @@ function evaluateHeuristics(board: any[][]): number {
   return score;
 }
 
-// Define Types for Multiplayer rooms
+import fs from "fs";
+
+// Define Types for User and Multiplayer rooms
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  provider: 'google' | 'icloud' | 'email';
+  avatar: string;
+  createdAt: string;
+}
+
 interface RoomState {
   id: string;
+  whitePlayerId: string | null;
+  blackPlayerId: string | null;
   whitePlayerJoined: boolean;
   blackPlayerJoined: boolean;
   board: any[][];
@@ -62,16 +82,63 @@ interface RoomState {
   lastUpdated: number;
 }
 
-// In-memory rooms database for Multiplayer mode
+interface DatabaseSchema {
+  users: Record<string, User>;
+  rooms: Record<string, RoomState>;
+}
+
+const DB_FILE = path.join(process.cwd(), "database.json");
+
+// Database file helper functions
+function readDb(): DatabaseSchema {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const data = fs.readFileSync(DB_FILE, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error("Error reading database file, using fallback:", e);
+  }
+  return { users: {}, rooms: {} };
+}
+
+function writeDb(data: DatabaseSchema) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch (e) {
+    console.error("Error writing database file:", e);
+  }
+}
+
+// Memory cache to keep quick access to active rooms (synchronized with DB)
 const rooms = new Map<string, RoomState>();
 
-// Clean up rooms older than 4 hours regularly
+// Seed in-memory cache from persistent DB at startup
+try {
+  const db = readDb();
+  for (const [id, room] of Object.entries(db.rooms)) {
+    rooms.set(id, room);
+  }
+} catch (e) {
+  console.error("Failed to seed in-memory rooms from persistent DB", e);
+}
+
+// Clean up rooms older than 12 hours regularly
 setInterval(() => {
   const now = Date.now();
+  const db = readDb();
+  let modified = false;
+
   for (const [id, room] of rooms.entries()) {
-    if (now - room.lastUpdated > 4 * 60 * 60 * 1000) {
+    if (now - room.lastUpdated > 12 * 60 * 60 * 1000) {
       rooms.delete(id);
+      delete db.rooms[id];
+      modified = true;
     }
+  }
+
+  if (modified) {
+    writeDb(db);
   }
 }, 30 * 60 * 1000);
 
@@ -81,9 +148,43 @@ async function startServer() {
 
   app.use(express.json());
 
-  // 1. API: Create Multiplayer Room
+  // 0. API: Auth login / registration (Google, iCloud/Apple, or Email)
+  app.post("/api/auth/login", (req, res) => {
+    const { email, name, provider, avatar } = req.body;
+
+    if (!email || !name || !provider) {
+      return res.status(400).json({ error: "Email, name, and provider are required" });
+    }
+
+    const db = readDb();
+    
+    // Find existing user with matching email and provider
+    let matchedUser = Object.values(db.users).find(
+      (u) => u.email.toLowerCase() === email.toLowerCase() && u.provider === provider
+    );
+
+    if (!matchedUser) {
+      // Create new user
+      const userId = "usr_" + Math.random().toString(36).substring(2, 11);
+      matchedUser = {
+        id: userId,
+        email: email.toLowerCase(),
+        name,
+        provider,
+        avatar: avatar || "👤",
+        createdAt: new Date().toISOString(),
+      };
+      db.users[userId] = matchedUser;
+      writeDb(db);
+    }
+
+    res.json(matchedUser);
+  });
+
+  // 1. API: Create Multiplayer Room with User
   app.post("/api/rooms/create", (req, res) => {
-    const { board } = req.body;
+    const { board, userId } = req.body;
+    
     // Generate a random 4-letter room ID
     const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let roomId = "";
@@ -93,6 +194,8 @@ async function startServer() {
 
     const room: RoomState = {
       id: roomId,
+      whitePlayerId: userId || null,
+      blackPlayerId: null,
       whitePlayerJoined: true, // Creator is White by default
       blackPlayerJoined: false,
       board: board || [],
@@ -107,12 +210,18 @@ async function startServer() {
     };
 
     rooms.set(roomId, room);
+    
+    // Save to persistent db
+    const db = readDb();
+    db.rooms[roomId] = room;
+    writeDb(db);
+
     res.json({ roomId, playerColor: 'white' });
   });
 
-  // 4. API: Join Multiplayer Room
+  // 4. API: Join Multiplayer Room with User
   app.post("/api/rooms/join", (req, res) => {
-    const { roomId } = req.body;
+    const { roomId, userId } = req.body;
     if (!roomId) {
       return res.status(400).json({ error: "Room ID is required" });
     }
@@ -129,12 +238,18 @@ async function startServer() {
     }
 
     room.blackPlayerJoined = true;
+    room.blackPlayerId = userId || null;
     room.lastUpdated = Date.now();
+
+    // Update persistent db
+    const db = readDb();
+    db.rooms[upperRoomId] = room;
+    writeDb(db);
 
     res.json({ roomId: upperRoomId, playerColor: 'black' });
   });
 
-  // 5. API: Get Multiplayer Room State
+  // 5. API: Get Multiplayer Room State with User Details
   app.get("/api/rooms/:id", (req, res) => {
     const roomId = req.params.id.toUpperCase();
     const room = rooms.get(roomId);
@@ -143,7 +258,15 @@ async function startServer() {
       return res.status(404).json({ error: "Room not found" });
     }
 
-    res.json(room);
+    const db = readDb();
+    const whitePlayer = room.whitePlayerId ? db.users[room.whitePlayerId] : null;
+    const blackPlayer = room.blackPlayerId ? db.users[room.blackPlayerId] : null;
+
+    res.json({
+      ...room,
+      whitePlayer,
+      blackPlayer,
+    });
   });
 
   // 6. API: Synchronize Multiplayer Move
@@ -167,7 +290,19 @@ async function startServer() {
     room.winner = winner;
     room.lastUpdated = Date.now();
 
-    res.json(room);
+    // Update persistent db
+    const db = readDb();
+    db.rooms[roomId] = room;
+    writeDb(db);
+
+    const whitePlayer = room.whitePlayerId ? db.users[room.whitePlayerId] : null;
+    const blackPlayer = room.blackPlayerId ? db.users[room.blackPlayerId] : null;
+
+    res.json({
+      ...room,
+      whitePlayer,
+      blackPlayer,
+    });
   });
 
   // 7. API: Reset Room State
@@ -261,7 +396,7 @@ Expected JSON schema:
 Return ONLY the raw JSON object. Do not wrap it in markdown codeblocks.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

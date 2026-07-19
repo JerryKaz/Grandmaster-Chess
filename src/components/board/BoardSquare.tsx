@@ -13,6 +13,7 @@ interface BoardSquareProps {
   isLastMoveDestination?: boolean;
   isHintSource?: boolean;
   isHintDestination?: boolean;
+  isFlipped?: boolean;
 }
 
 export default function BoardSquare({
@@ -25,6 +26,7 @@ export default function BoardSquare({
   isLastMoveDestination = false,
   isHintSource = false,
   isHintDestination = false,
+  isFlipped = false,
 }: BoardSquareProps) {
   const activeColor = useChessStore((state) => state.activeColor);
   const selectedSquare = useChessStore((state) => state.selectedSquare);
@@ -32,6 +34,7 @@ export default function BoardSquare({
   const movePiece = useChessStore((state) => state.movePiece);
   const board = useChessStore((state) => state.board);
   const setPendingPromotion = useChessStore((state) => state.setPendingPromotion);
+  const showCoordinates = useChessStore((state) => state.showCoordinates);
   
   const gameMode = useChessStore((state) => state.gameMode);
   const multiplayerRole = useChessStore((state) => state.multiplayerRole);
@@ -66,8 +69,8 @@ export default function BoardSquare({
   const bgClass = isDark ? currentTheme.dark : currentTheme.light;
 
   // Coordinate Labels
-  const showRankLabel = col === 0; // Show Rank (8-1) on the first column
-  const showFileLabel = row === 7; // Show File (a-h) on the bottom row
+  const showRankLabel = showCoordinates && (col === (isFlipped ? 7 : 0)); // Show Rank on the left-most column
+  const showFileLabel = showCoordinates && (row === (isFlipped ? 0 : 7)); // Show File on the bottom-most row
 
   const rankValue = 8 - row;
   const fileValue = String.fromCharCode(97 + col); // 'a' to 'h'
@@ -167,7 +170,7 @@ export default function BoardSquare({
       {isHintSource && (
         <div
           id={`hint-source-overlay-${row}-${col}`}
-          className="absolute inset-0 bg-violet-500/15 ring-4 ring-violet-500 ring-inset z-10 animate-pulse pointer-events-none"
+          className="absolute inset-0 bg-amber-500/10 ring-4 ring-amber-500/40 ring-inset z-10 animate-pulse pointer-events-none"
         />
       )}
 
@@ -175,9 +178,9 @@ export default function BoardSquare({
       {isHintDestination && (
         <div
           id={`hint-destination-overlay-${row}-${col}`}
-          className="absolute inset-0 bg-violet-600/20 border-4 border-dashed border-violet-500 z-10 animate-pulse pointer-events-none flex items-center justify-center"
+          className="absolute inset-0 bg-amber-500/15 border-2 border-dashed border-amber-500/60 z-10 animate-pulse pointer-events-none flex items-center justify-center"
         >
-          <div className="w-5 h-5 rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.8)]" />
+          <div className="w-4 h-4 rounded-full bg-amber-500/80 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
         </div>
       )}
 

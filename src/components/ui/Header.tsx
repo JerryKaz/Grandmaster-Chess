@@ -1,4 +1,4 @@
-import { Crown, RotateCcw, Award } from 'lucide-react';
+import { Crown, RotateCcw } from 'lucide-react';
 import { useChessStore } from '../../features/chess/store/chessStore';
 
 export default function Header() {
@@ -15,19 +15,12 @@ export default function Header() {
             Grandmaster <span className="text-amber-400 font-medium text-lg">Chess</span>
           </h1>
           <p className="font-mono text-[10px] text-slate-400 mt-1 uppercase tracking-widest">
-            Phase 1: Structural Setup
+            Grandmaster Edition
           </p>
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="hidden md:flex items-center gap-2 bg-slate-800/40 border border-slate-700/50 px-3.5 py-1.5 rounded-full">
-          <Award className="w-4 h-4 text-amber-400" />
-          <span className="font-sans text-xs font-semibold text-slate-300">
-            Senior Architecture Demo
-          </span>
-        </div>
-
         <button
           onClick={resetGame}
           className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 font-sans text-sm font-medium px-4 py-2 rounded-lg transition-all duration-200 border border-slate-700/50 shadow-md active:scale-95 cursor-pointer"

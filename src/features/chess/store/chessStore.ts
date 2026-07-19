@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { GameState, SquareCoordinates, Move, ChessPiece, Color, PieceType, BoardTheme, PromotionState } from '../models/types';
+import { GameState, SquareCoordinates, Move, ChessPiece, Color, PieceType, BoardTheme, PromotionState, User } from '../models/types';
 import { generateInitialBoard, convertToAlgebraic } from '../utils/initialBoard';
 import { audioService } from '../services/audioService';
 import { isKingInCheck, calculateLegalMoves } from '../engine/moveValidator';
@@ -16,8 +16,10 @@ interface ChessStore extends GameState {
   soundCaptureEnabled: boolean;
   soundAlertEnabled: boolean;
   boardTheme: BoardTheme;
+  showCoordinates: boolean;
   pendingPromotion: PromotionState | null;
   hintMove: { from: SquareCoordinates; to: SquareCoordinates } | null;
+  user: User | null;
 
   resetGame: () => void;
   selectSquare: (coords: SquareCoordinates | null) => void;
@@ -35,7 +37,9 @@ interface ChessStore extends GameState {
   setSoundCaptureEnabled: (enabled: boolean) => void;
   setSoundAlertEnabled: (enabled: boolean) => void;
   setBoardTheme: (theme: BoardTheme) => void;
+  setShowCoordinates: (show: boolean) => void;
   setHintMove: (move: { from: SquareCoordinates; to: SquareCoordinates } | null) => void;
+  setUser: (user: User | null) => void;
 }
 
 const initialGameState: GameState = {
@@ -132,6 +136,7 @@ export const useChessStore = create<ChessStore>((set) => {
   let soundCaptureEnabledInit = true;
   let soundAlertEnabledInit = true;
   let boardThemeInit: BoardTheme = 'forest';
+  let showCoordinatesInit = true;
   try {
     const savedSound = localStorage.getItem('chess_sound_enabled');
     if (savedSound !== null) {
@@ -153,8 +158,22 @@ export const useChessStore = create<ChessStore>((set) => {
     if (savedTheme === 'classic' || savedTheme === 'ocean' || savedTheme === 'forest') {
       boardThemeInit = savedTheme;
     }
+    const savedShowCoordinates = localStorage.getItem('chess_show_coordinates');
+    if (savedShowCoordinates !== null) {
+      showCoordinatesInit = savedShowCoordinates === 'true';
+    }
   } catch (e) {
     console.warn("localStorage is not available for chess settings", e);
+  }
+
+  let userInit: User | null = null;
+  try {
+    const savedUserStr = localStorage.getItem('chess_user_session');
+    if (savedUserStr) {
+      userInit = JSON.parse(savedUserStr);
+    }
+  } catch (e) {
+    console.warn("Could not load user session from localStorage", e);
   }
 
   return {
@@ -170,8 +189,10 @@ export const useChessStore = create<ChessStore>((set) => {
     soundCaptureEnabled: soundCaptureEnabledInit,
     soundAlertEnabled: soundAlertEnabledInit,
     boardTheme: boardThemeInit,
+    showCoordinates: showCoordinatesInit,
     pendingPromotion: null,
     hintMove: null,
+    user: userInit,
 
     resetGame: () =>
       set((state) => ({
@@ -489,6 +510,26 @@ export const useChessStore = create<ChessStore>((set) => {
     }
     set({ boardTheme: theme });
   },
+  setShowCoordinates: (show) => {
+    try {
+      localStorage.setItem('chess_show_coordinates', String(show));
+    } catch (e) {
+      console.warn("Could not save show coordinates setting to localStorage", e);
+    }
+    set({ showCoordinates: show });
+  },
   setHintMove: (move) => set({ hintMove: move }),
+  setUser: (user) => {
+    try {
+      if (user) {
+        localStorage.setItem('chess_user_session', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('chess_user_session');
+      }
+    } catch (e) {
+      console.warn("Could not save user session to localStorage", e);
+    }
+    set({ user });
+  },
 };
 });
