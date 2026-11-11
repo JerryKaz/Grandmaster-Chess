@@ -74,7 +74,7 @@ function EvalGraph({ review, viewPly, onSelect }: { review: ReviewData; viewPly:
         onSelect(Math.round(((e.clientX - rect.left) / rect.width) * n));
       }}
       role="img"
-      aria-label="Evaluation graph — click to jump to a move"
+      aria-label="Evaluation graph. Click to jump to a move"
     >
       <path d={area} fill="#e4e4e7" />
       <line x1="0" x2={W} y1={H / 2} y2={H / 2} stroke="#71717a" strokeWidth="0.5" strokeDasharray="3 3" />

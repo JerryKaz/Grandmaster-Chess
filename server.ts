@@ -109,7 +109,9 @@ async function start() {
     app.use(
       express.static(dist, {
         setHeaders(res, file) {
-          if (file.includes(`${path.sep}assets${path.sep}`)) {
+          if (file.endsWith(`${path.sep}sw.js`) || file.endsWith('.webmanifest')) {
+            res.setHeader('Cache-Control', 'no-cache'); // updates must reach installed apps promptly
+          } else if (file.includes(`${path.sep}assets${path.sep}`)) {
             res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // content-hashed
           } else if (file.includes(`${path.sep}engine${path.sep}`) || file.includes(`${path.sep}pieces${path.sep}`)) {
             res.setHeader('Cache-Control', 'public, max-age=604800'); // versioned by file name

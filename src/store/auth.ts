@@ -38,7 +38,7 @@ export const useAuth = create<AuthState>((set) => ({
       set({ clientId: config.googleClientId ?? null, user: me.user ?? null, ready: true });
       if (me.user) onSignedIn?.();
     } catch {
-      set({ ready: true }); // offline or server without auth — play as guest
+      set({ ready: true }); // offline or server without auth: play as guest
     }
   },
 

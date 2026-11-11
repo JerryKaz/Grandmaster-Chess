@@ -27,6 +27,7 @@ import { useAuth } from './store/auth';
 import { initSync } from './store/sync';
 import { PuzzleView } from './components/puzzles/PuzzleView';
 import { AccountDialog, Avatar } from './components/dialogs/AccountDialog';
+import { InstallPrompt } from './components/InstallPrompt';
 
 /** Leaving the board mid-game would let a clock run out unseen, so only allow it for untimed offline games. */
 function canLeaveGame(): boolean {
@@ -60,7 +61,7 @@ function Header({ onArchive, onAccount }: { onArchive: () => void; onAccount: ()
             setView('play');
             if (useGame.getState().status !== 'playing') useGame.getState().showSetup();
           }}
-          aria-label="Grandmaster Chess — home"
+          aria-label="Grandmaster Chess home"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-[0_2px_0_#047857]">
             <Crown size={18} />
@@ -71,23 +72,26 @@ function Header({ onArchive, onAccount }: { onArchive: () => void; onAccount: ()
           <button
             type="button"
             className={navBtn(view === 'play' && mode !== 'analysis')}
+            aria-label="Play"
             onClick={() => {
               setView('play');
               if (!(status === 'playing' && mode !== 'analysis')) useGame.getState().showSetup();
             }}
           >
-            <Play size={16} /> <span className="max-[400px]:hidden">Play</span>
+            <Play size={16} /> <span className="max-[440px]:hidden">Play</span>
           </button>
           <button
             type="button"
             className={navBtn(view === 'puzzles')}
+            aria-label="Puzzles"
             onClick={() => canLeaveGame() && setView('puzzles')}
           >
-            <Puzzle size={16} /> <span className="max-[400px]:hidden">Puzzles</span>
+            <Puzzle size={16} /> <span className="max-[440px]:hidden">Puzzles</span>
           </button>
           <button
             type="button"
             className={navBtn(view === 'play' && mode === 'analysis')}
+            aria-label="Analysis"
             onClick={() => {
               setView('play');
               const s = useGame.getState();
@@ -99,7 +103,7 @@ function Header({ onArchive, onAccount }: { onArchive: () => void; onAccount: ()
               if (keep) useGame.setState({ result: s.result });
             }}
           >
-            <Microscope size={16} /> <span className="max-[400px]:hidden">Analysis</span>
+            <Microscope size={16} /> <span className="max-[440px]:hidden">Analysis</span>
           </button>
         </nav>
         <IconButton label="Your games" onClick={onArchive}><History size={20} /></IconButton>
@@ -152,6 +156,12 @@ export default function App() {
     initOnline();
   }, []);
   useKeyboardNav(view === 'play');
+
+  // A new game should start with the whole board in view (the Play button sits below the fold on phones).
+  const gameId = useGame((s) => s.id);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [gameId]);
   const botThinking = useBotOpponent();
   const now = useClockTick();
 
@@ -287,8 +297,9 @@ export default function App() {
 
       <GameOverDialog />
       <SettingsDialog />
-      <ArchiveDialog open={archiveOpen} onClose={() => { setArchiveOpen(false); }} />
+      <ArchiveDialog open={archiveOpen} onClose={() => setArchiveOpen(false)} />
       <AccountDialog open={accountOpen} onClose={() => setAccountOpen(false)} />
+      <InstallPrompt />
       <Toasts />
     </div>
   );

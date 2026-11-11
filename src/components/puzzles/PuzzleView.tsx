@@ -23,14 +23,14 @@ function StatusBanner() {
   const content: Record<string, { icon: React.ReactNode; text: string; tone: string }> = {
     loading: { icon: <Loader2 size={18} className="animate-spin" />, text: 'Loading puzzle…', tone: 'bg-white/8 text-zinc-300' },
     setup: { icon: <Loader2 size={18} className="animate-spin" />, text: 'Watch your opponent’s move…', tone: 'bg-white/8 text-zinc-300' },
-    solving: { icon: <Target size={18} />, text: `Your turn — find the best move for ${side}`, tone: 'bg-white/8 text-white' },
+    solving: { icon: <Target size={18} />, text: `Your turn: find the best move for ${side}`, tone: 'bg-white/8 text-white' },
     reply: { icon: <Check size={18} />, text: 'Correct! Keep going…', tone: 'bg-emerald-500/15 text-emerald-200' },
     wrong: {
       icon: <X size={18} />,
-      text: mode === 'streak' && streakOver ? 'Wrong move — streak over' : 'That’s not the move. Try again?',
+      text: mode === 'streak' && streakOver ? 'Wrong move. Streak over' : 'That’s not the move. Try again?',
       tone: 'bg-rose-500/15 text-rose-200',
     },
-    solved: { icon: <Check size={18} />, text: result === 'win' ? 'Solved!' : 'Solved — but it won’t count this time', tone: 'bg-emerald-500/15 text-emerald-200' },
+    solved: { icon: <Check size={18} />, text: result === 'win' ? 'Solved!' : 'Solved, but it won’t count this time', tone: 'bg-emerald-500/15 text-emerald-200' },
     solution: { icon: <Eye size={18} />, text: 'Here’s the solution', tone: 'bg-amber-500/15 text-amber-100' },
     error: { icon: <X size={18} />, text: 'Couldn’t load puzzles. Check your connection.', tone: 'bg-rose-500/15 text-rose-200' },
   };

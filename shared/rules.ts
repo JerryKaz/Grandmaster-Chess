@@ -53,13 +53,13 @@ export function describeResult(result: GameResult): string {
   const who = result.winner === 'w' ? 'White' : result.winner === 'b' ? 'Black' : null;
   switch (result.reason) {
     case 'checkmate': return `${who} wins by checkmate`;
-    case 'resign': return `${who} wins — opponent resigned`;
+    case 'resign': return `${who} wins, opponent resigned`;
     case 'timeout': return `${who} wins on time`;
-    case 'abandon': return `${who} wins — opponent left`;
+    case 'abandon': return `${who} wins, opponent left`;
     case 'stalemate': return 'Draw by stalemate';
     case 'repetition': return 'Draw by threefold repetition';
     case 'fifty-move': return 'Draw by the 50-move rule';
-    case 'insufficient': return 'Draw — insufficient material';
+    case 'insufficient': return 'Draw by insufficient material';
     case 'agreement': return 'Draw by agreement';
   }
 }

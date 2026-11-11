@@ -76,7 +76,7 @@ Side to move: ${chess.turn() === 'w' ? 'White' : 'Black'}
 ${engine}
 
 Respond with: a 2-3 sentence summary of the position (material, king safety, pawn structure, activity);
-a short comment on the last move ${lastMove ? `(${lastMove})` : '(none — starting position)'};
+a short comment on the last move ${lastMove ? `(${lastMove})` : '(none, starting position)'};
 and one concrete plan each for White and Black.`;
 
   try {

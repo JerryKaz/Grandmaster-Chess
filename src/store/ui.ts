@@ -21,7 +21,10 @@ let nextId = 1;
 
 export const useUi = create<UiState>((set, get) => ({
   view: new URLSearchParams(location.search).has('puzzles') ? 'puzzles' : 'play',
-  setView: (view) => set({ view }),
+  setView: (view) => {
+    if (view !== get().view) window.scrollTo(0, 0);
+    set({ view });
+  },
   toasts: [],
   settingsOpen: false,
   toast: (text) => {

@@ -1,15 +1,23 @@
 {
+  "id": "/",
   "name": "Grandmaster Chess",
   "short_name": "Grandmaster",
-  "description": "Play chess against bots or friends, then review your games.",
-  "start_url": "/",
+  "description": "Play chess against bots or friends, solve puzzles, and review your games.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#18181b",
   "theme_color": "#18181b",
+  "categories": ["games", "education", "entertainment"],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Puzzles", "url": "/?puzzles", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

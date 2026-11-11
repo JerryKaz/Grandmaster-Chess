@@ -1,6 +1,7 @@
 import { BOARD_THEMES, useSettings, type BoardTheme } from '../../store/settings';
 import { useUi } from '../../store/ui';
 import { Dialog, Label, Toggle, cx } from '../ui/kit';
+import { InstallSettingsRow } from '../InstallPrompt';
 
 export function SettingsDialog() {
   const open = useUi((s) => s.settingsOpen);
@@ -54,10 +55,14 @@ export function SettingsDialog() {
           <Toggle label="Confirm resign & draw" checked={s.confirmResign} onChange={(v) => s.set({ confirmResign: v })} />
           <Toggle
             label="Eval bar in computer games"
-            description="Off by default — it gives away the best moves"
+            description="Off by default, since it gives away the best moves"
             checked={s.evalInBotGames}
             onChange={(v) => s.set({ evalInBotGames: v })}
           />
+        </div>
+        <div>
+          <Label>App</Label>
+          <InstallSettingsRow />
         </div>
         <p className="text-xs text-zinc-500">
           Tips: drag or tap to move · right-click and drag to draw arrows · ← → to step through moves · F flips the board.

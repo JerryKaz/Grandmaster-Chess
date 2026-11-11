@@ -12,7 +12,7 @@ export function save(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* storage unavailable — non-fatal */
+    /* storage unavailable, non-fatal */
   }
 }
 

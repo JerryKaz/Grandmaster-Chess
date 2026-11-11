@@ -28,8 +28,14 @@ function Badge({ cls }: { cls: MoveClass }) {
 /** Desktop: two-column table. Scrolls the active move into view. */
 export function MoveTable({ plies, viewPly, firstMoveNumber, blackFirst, classes, onSelect }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  // Scroll only the list itself. scrollIntoView would also scroll the page, which jumps on phones.
   useEffect(() => {
-    ref.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+    const box = ref.current;
+    const el = box?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!box || !el) return;
+    const top = el.offsetTop; // box is position:relative, so this is relative to the list
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (top + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top + el.offsetHeight - box.clientHeight;
   }, [viewPly, plies.length]);
 
   const offset = blackFirst ? 1 : 0;
@@ -63,7 +69,7 @@ export function MoveTable({ plies, viewPly, firstMoveNumber, blackFirst, classes
   if (plies.length === 0) return <p className="px-3 py-6 text-center text-sm text-zinc-500">No moves yet.</p>;
 
   return (
-    <div ref={ref} className="overflow-y-auto text-sm">
+    <div ref={ref} className="relative overflow-y-auto text-sm">
       {rows.map((r, idx) => (
         <div key={idx} className={cx('grid grid-cols-[2.75rem_1fr_1fr] items-center', idx % 2 === 1 && 'bg-white/[0.025]')}>
           <span className="pl-3 text-zinc-500 tabular-nums">{r.no}.</span>
@@ -79,13 +85,16 @@ export function MoveTable({ plies, viewPly, firstMoveNumber, blackFirst, classes
 export function MoveStrip({ plies, viewPly, firstMoveNumber, blackFirst, classes, onSelect }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.querySelector('[data-active="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+    const box = ref.current;
+    const el = box?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!box || !el) return;
+    box.scrollTo({ left: el.offsetLeft - box.clientWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' });
   }, [viewPly, plies.length]);
 
   if (plies.length === 0) return <div className="flex h-10 items-center px-3 text-sm text-zinc-500">Make your first move</div>;
   const offset = blackFirst ? 1 : 0;
   return (
-    <div ref={ref} className="no-scrollbar flex h-10 items-center gap-0.5 overflow-x-auto px-2 text-sm">
+    <div ref={ref} className="no-scrollbar relative flex h-10 items-center gap-0.5 overflow-x-auto px-2 text-sm">
       {plies.map((p, i) => {
         const idx = i + offset;
         const showNo = idx % 2 === 0 || i === 0;

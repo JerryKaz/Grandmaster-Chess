@@ -47,7 +47,7 @@ function InviteCard() {
   const link = inviteLink(room.id);
   const share = async () => {
     try {
-      if (navigator.share) await navigator.share({ title: 'Play chess with me', text: `Join my game — code ${room.id}`, url: link });
+      if (navigator.share) await navigator.share({ title: 'Play chess with me', text: `Join my game with code ${room.id}`, url: link });
       else {
         await navigator.clipboard.writeText(link);
         setCopied(true);

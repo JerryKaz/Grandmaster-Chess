@@ -1,7 +1,7 @@
 /**
  * Compact opening catalogue (ECO + name + main line in SAN).
  * Used to label the current opening and to mark "book" moves in game review.
- * Matching is by move-order prefix, so transpositions are not detected — good enough for labelling.
+ * Matching is by move-order prefix, so transpositions are not detected. Good enough for labelling.
  */
 const LINES: [eco: string, name: string, moves: string][] = [
   ['B00', "King's Pawn Opening", 'e4'],

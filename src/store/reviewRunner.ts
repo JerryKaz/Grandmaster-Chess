@@ -27,7 +27,7 @@ export async function startReview() {
     console.error('[review]', err);
     if (!mine.signal.aborted) {
       setReview(null, null);
-      toast('Game review failed — the engine could not be loaded.');
+      toast('Game review failed. The engine could not be loaded.');
     }
   } finally {
     if (ctrl === mine) ctrl = null;

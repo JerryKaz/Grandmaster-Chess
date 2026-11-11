@@ -1,4 +1,4 @@
-/** Tiny Web Audio synth for board sounds — no audio files to download. */
+/** Tiny Web Audio synth for board sounds. No audio files to download. */
 type SoundName = 'move' | 'capture' | 'check' | 'castle' | 'promote' | 'end' | 'illegal' | 'lowtime' | 'notify';
 
 let ctx: AudioContext | null = null;

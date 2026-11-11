@@ -42,7 +42,7 @@ interface GameState {
   hint: { from: Square; to: Square } | null;
   review: ReviewData | null;
   reviewProgress: number | null;
-  /** Latest evaluation the bot computed (White POV cp) — used to decide draw offers. */
+  /** Latest evaluation the bot computed (White POV cp), used to decide draw offers. */
   botEval: number | null;
   /** True when the last move was dropped by drag (skip the slide animation). */
   lastMoveDragged: boolean;

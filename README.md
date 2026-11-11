@@ -2,6 +2,27 @@
 
 A full-stack chess app with React and Node. You can play Stockfish bots, play a friend online, or play two people on one device. After a game you get a Chess.com-style game review, an analysis board, and an optional AI coach (Gemini). It works on desktop and mobile, and you can install it to the home screen.
 
+## Screenshots
+
+### Before and after
+
+| | Before | After |
+|---|---|---|
+| **Desktop** | <img src="docs/screenshots/before-desktop.png" alt="Old desktop UI" width="420"> | <img src="docs/screenshots/after-desktop-play.png" alt="New desktop UI during a game against the computer" width="420"> |
+| **Mobile** | <img src="docs/screenshots/before-mobile.png" alt="Old mobile UI" width="220"> | <img src="docs/screenshots/after-mobile-play.png" alt="New mobile UI during a game" width="220"> |
+
+The old version used Unicode piece glyphs, a fixed 10-minute clock and three crowded columns. The new version puts the board first, with SVG pieces, a move strip, and touch-friendly controls on phones.
+
+### New features
+
+| Game review | Puzzles |
+|---|---|
+| <img src="docs/screenshots/after-desktop-review.png" alt="Game review with accuracy, move classifications and engine lines" width="420"> | <img src="docs/screenshots/after-desktop-puzzles.png" alt="Rated puzzles" width="420"> |
+
+| New game (mobile) | Puzzles (mobile) | Install as an app |
+|---|---|---|
+| <img src="docs/screenshots/after-mobile-home.png" alt="Choosing a computer opponent on mobile" width="220"> | <img src="docs/screenshots/after-mobile-puzzles.png" alt="Puzzles on mobile" width="220"> | <img src="docs/screenshots/after-mobile-install.png" alt="Install prompt on iPhone" width="220"> |
+
 ## Features
 
 **Play**
@@ -43,9 +64,9 @@ A full-stack chess app with React and Node. You can play Stockfish bots, play a 
 ```
 server.ts               Express + WebSocket server (dev: Vite middleware, prod: static dist/)
 server/rooms.ts         Authoritative online games: validates every move, runs clocks, handles draws/rematches/reconnects
-server/coach.ts         /api/coach — Gemini with structured JSON output, rate-limited
+server/coach.ts         /api/coach: Gemini with structured JSON output, rate-limited
 server/auth.ts          Google sign-in, sessions, CSRF/origin checks, progress sync (/api/auth/*, /api/me/*)
-server/db.ts            Tiny JSON-file store (atomic writes) — swap for Postgres/MongoDB when you outgrow it
+server/db.ts            Tiny JSON-file store (atomic writes). Swap for Postgres/MongoDB when you outgrow it
 public/puzzles/         Curated puzzle set (CC0)
 shared/protocol.ts      Typed client/server message protocol
 shared/rules.ts         Result detection shared by client and server
