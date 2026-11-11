@@ -1,6 +1,8 @@
 {
-  "name": "Chess Game",
-  "description": "A clean, modular, and highly polished modern Chess application built in React and TypeScript.",
+  "name": "Grandmaster Chess",
+  "description": "Chess vs Stockfish bots, online play with friends, game review and an AI coach. Works on desktop and mobile.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

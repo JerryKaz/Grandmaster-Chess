@@ -1,9 +1,80 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+html {
+  background: #18181b;
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
+/*
+ * Board sizing: the board is the hero element. On phones it fills the width
+ * (bounded by the visible height); on desktop it fills the height next to the side panel.
+ */
+.board-col {
+  width: min(100vw - 16px, 100vh - 210px);
+  width: min(100vw - 16px, 100dvh - 210px);
+  min-width: 280px;
+  max-width: 100%;
+}
+.board-col--setup {
+  width: min(100vw - 16px, 46vh);
+  width: min(100vw - 16px, 46dvh);
+}
+@media (min-width: 1024px) {
+  .board-col,
+  .board-col--setup {
+    width: min(100vh - 250px, 100vw - 480px);
+    width: min(100dvh - 250px, 100vw - 480px);
+    min-width: 420px;
+  }
+  .side-panel {
+    height: calc(100dvh - 104px);
+    max-height: 880px;
+    overflow-y: auto;
+  }
+}
+@media (max-width: 1023px) {
+  .side-panel {
+    max-width: min(100vw - 16px, 560px);
+  }
+}
+
+@keyframes piece-slide {
+  from {
+    transform: translate(var(--fx), var(--fy));
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.animate-sheet {
+  animation: sheet-in 180ms ease-out;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piece,
+  .animate-sheet {
+    animation: none !important;
+  }
+}

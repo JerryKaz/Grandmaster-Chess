@@ -1,0 +1,3 @@
+Piece set "cburnett" by Colin M.L. Burnett.
+Source: https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces (via github.com/lichess-org/lila)
+Licensed under GPLv2+ / GFDL / BSD (triple-licensed by the author on Wikimedia Commons).

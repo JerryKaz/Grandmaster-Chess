@@ -1,191 +1,90 @@
-# Full-Stack Chess with AI Opponents, Multiplayer & AI Coach
+# Grandmaster Chess
 
-![Home Screen](https://github.com/user-attachments/assets/cc066f18-cd33-4132-9efa-09a1443e686f)
+A full-stack chess app with React and Node. You can play Stockfish bots, play a friend online, or play two people on one device. After a game you get a Chess.com-style game review, an analysis board, and an optional AI coach (Gemini). It works on desktop and mobile, and you can install it to the home screen.
 
-![Game Interface](https://github.com/user-attachments/assets/3a38e4b7-541b-41f8-a732-ddc5cb032139)
+## Features
 
-A state-of-the-art, visually stunning, fully-featured, and modern full-stack Chess application. This project is built using a React (Vite) + Tailwind CSS front-end and a secure Node.js + Express backend.
+**Play**
+- **vs Computer:** eight bot levels from about 400 Elo to full-strength Stockfish 19. Stockfish runs as WASM in a Web Worker, so the UI never freezes.
+- **Play a friend online:** create a game, share the link or the 6-character code, and play in real time over WebSockets. Spectators can watch. Includes draw offers, resign, rematch (with colours swapped), automatic reconnect, and abandonment detection.
+- **Pass & play:** two players on one device.
+- **Time controls:** bullet, blitz, rapid, classical and unlimited, with increments. Clocks start after each side's first move. The low-time warning beeps. A flag fall is scored as a draw when the opponent can't mate.
+- **Full rules via `chess.js`:** castling, en passant, promotion with a piece picker, check and mate, stalemate, threefold repetition, the 50-move rule and insufficient material.
 
-A state-of-the-art, visually stunning, fully-featured, and modern full-stack Chess application. This project is built using a React (Vite) + Tailwind CSS front-end and a secure Node.js + Express backend. 
+**Board UX**
+- Move by dragging or tapping (touch-safe, no page scroll while dragging).
+- Legal-move dots, last-move and check highlights, and slide animations.
+- Right-click and drag draws arrows; right-click marks a square.
+- Keyboard: `←` `→` `Home` `End` step through moves, `F` flips the board.
+- Five board themes, the cburnett SVG pieces, and synthesized sounds (no audio files).
 
-The application incorporates a custom client-side chess rule validator, an integrated offline chess engine with customizable difficulty levels, online multiplayer matchmaking, and an **AI Chess Coach** powered by Gemini to provide real-time strategic commentary and tactical feedback.
+**Puzzles**
+- About 4,000 rated tactics puzzles from the Lichess open database (CC0), checked for legality and spread across ratings from 400 to 2700.
+- **Rated mode:** your puzzle rating adjusts after every puzzle. You can filter by theme (mate in 1/2/3, fork, pin, skewer, sacrifice, endgame and more).
+- **Streak mode:** puzzles get harder each time, and one mistake ends the run. Your best streak is saved.
+- Hint, retry, show solution, and "Analyse this puzzle" on the analysis board. Any checkmating move is accepted, even if it differs from the stored solution.
 
----
+**Accounts (optional)**
+- **Sign in with Google** using Google Identity Services. The server verifies the ID token with `google-auth-library` and issues its own session: a random token in an httpOnly, SameSite=Lax cookie, stored server-side only as a SHA-256 hash, valid for 30 days.
+- Puzzle rating and game history sync across devices.
+- In online games your seat follows your account, and opponents see your Google name with a verified badge.
+- Guests can still play everything without signing in.
 
-##  Key Features
+**Improve**
+- **Game review:** every move is classified (Book, Best, Excellent, Good, Inaccuracy, Mistake, Blunder) with Lichess-style accuracy, an evaluation graph and best-move arrows.
+- **Analysis board:** eval bar and the top three Stockfish lines. You can import PGN or FEN, and export PGN or FEN.
+- **Hints and takebacks** against bots.
+- **Game archive:** your last 50 games, plus win/draw/loss stats against the computer.
+- **AI Coach:** Gemini explains the position. It is grounded in the engine evaluation, and the server replays and validates every move before calling the model.
+- A game in progress survives a page reload.
 
-### 1. Game Modes
-*   **Local Play (Pass-and-Play):** Play chess face-to-face on a single screen with standard chess rules, castling rights, en-passant captures, pawn promotions, and automated check/checkmate detection.
-*   **vs AI Opponents:** Play against local artificial intelligence with four selectable difficulty settings (`easy`, `medium`, `hard`, `gemini`). Includes options to play as White or Black and dynamically flips the board perspective.
-*   **Multiplayer (Two-Player Online Matchmaking):** Set up private or shared online rooms instantly. Features real-time state synchronization, automated side selection, spectator views, and real-time status notifications.
-
-### 2. Deep AI Engine & Difficulty Matrix
-*   **Opening Book Integration:** Uses an integrated database of chess opening theory (e.g., King's Pawn, Queen's Gambit, Sicilian Defense) so AI opponents follow standard grandmaster opening theory before entering mid-game calculation.
-*   **Multi-Depth Minimax Search:**
-    *   **Easy (ELO 800):** Depth 1 search with a 40% probability of choosing a random legal move to simulate a learning beginner.
-    *   **Medium (ELO 1500):** Depth 2 minimax evaluation utilizing piece-square weight heuristics.
-    *   **Hard (ELO 2100):** Depth 3 minimax evaluation with alpha-beta pruning for deep calculation.
-    *   **Gemini Oracle (ELO 2800+):** Advanced Depth 3 minimax search combined with optimized position calculations.
-
-### 3. Real-Time Gemini AI Coach & Post-Move Analysis
-*   The interactive **AI Coach** tab sits right next to your move history.
-*   With a single click, users can request an instant comprehensive positional analysis of the board from Gemini (`gemini-2.5-flash`).
-*   **What the AI Coach Analyzes:**
-    *   **Engine Score:** Estimated material and positional balance (e.g., `+1.2` for White advantage, `-0.5` for Black advantage) represented visually with a dynamic evaluation meter.
-    *   **Coach Summary:** A highly readable tactical breakdown of current king safety, open files, active pieces, and pawn structure.
-    *   **Last Move Insight:** Intelligent feedback on the quality, safety, or purpose of the very last move played.
-    *   **Recommended Strategic Plans:** Two tailored guides detailing recommended paths of action for both White and Black.
-*   **Resilient Fallback System:** If the user has not configured a `GEMINI_API_KEY` environment variable, the server automatically engages a local heuristics engine that evaluates exact board material balance and guides the user on how to configure their API key to unlock the grandmaster coaching commentary.
-
-### 4. High-Fidelity UX & Responsive Design
-*   **Cosmic Dark Theme:** Beautiful slate-colored dark visual canvas with vibrant violet and high-contrast accents.
-*   **Board Coordinates Overlay:** High-contrast algebraic notation labels (`a-h`, `1-8`) overlayed directly onto the border squares of the board. Coordinates automatically adapt their positions dynamically based on whether the view perspective is standard (White) or flipped (Black).
-*   **Dynamic Settings Control:** A comprehensive settings popover allowing players to dynamically toggle coordinates visibility on/off and configure sound parameters independently.
-*   **Fluid Animations:** Built with `motion` layouts to animate piece dragging, board rotation, sliding indicators, and active overlays.
-*   **Soundscapes:** Built-in web audio context synthesizing crisp, organic retro sound effects for moves, captures, check notifications, and game completions.
-*   **Clock Timers:** Professional dual chess clocks with flexible customizable time limits.
-
----
-
-##  Tech Stack & Architecture
-
-### Frontend
-*   **Framework:** React 18+ (with Vite)
-*   **Language:** TypeScript
-*   **State Management:** Zustand (centralized chess board state, move history, active color, sound options, game configuration, and timer parameters)
-*   **Styling:** Tailwind CSS (utility-first, responsive grid, visual states)
-*   **Animations:** `motion/react`
-*   **Icons:** `lucide-react`
-
-### Backend
-*   **Server Engine:** Node.js with Express
-*   **Runtime Compiler:** `tsx` (development) and `esbuild` (production bundling into a single self-contained CommonJS `dist/server.cjs`)
-*   **Generative AI:** `@google/genai` (Official SDK utilizing the fast, instruction-following `gemini-2.5-flash` model)
-
----
-
-##  System Architecture & Folder Structure
-
-The codebase is modularized cleanly into separate areas of concern to make sure it is easy to maintain and scale:
+## Architecture
 
 ```
-├── server.ts                       # Full-stack Express server (API endpoints & static serving)
-├── package.json                    # Scripts and dependencies
-├── metadata.json                   # App permissions and features declaration
-├── src/
-│   ├── main.tsx                    # React client entry point
-│   ├── App.tsx                     # Main Dashboard Layout, Sidebar Controller, and Modal Overlays
-│   ├── index.css                   # Global CSS (tailwindcss imports & Custom font face mappings)
-│   ├── components/
-│   │   ├── board/
-│   │   │   ├── ChessBoard.tsx      # Multi-perspective rendering grid (White/Black flip controller)
-│   │   │   ├── BoardSquare.tsx     # Grid tile containing pieces, move highlights, and event listeners
-│   │   │   └── PromotionModal.tsx  # Select modal overlay for pawn promotion options
-│   │   ├── pieces/
-│   │   │   └── ChessPiece.tsx      # Interactive chess pieces with motion layouts & high-contrast SVGs
-│   │   └── ui/
-│   │       └── Header.tsx          # Responsive navigation header featuring Game Reset and Elos
-│   └── features/
-│       └── chess/
-│           ├── engine/
-│           │   ├── chessEngine.ts  # Recursive minimax search tree calculations & positional weight evaluations
-│           │   └── moveValidator.ts # Core Chess rules engine, movement metrics, and legal status matrix
-│           ├── hooks/
-│           │   └── useValidMoves.ts # React custom hook checking active square coordinate validations
-│           ├── models/
-│           │   └── types.ts        # Typed schemas, interfaces, turn trackers, and player attributes
-│           ├── services/
-│           │   └── audioService.ts  # Web Audio API synthesizers producing high-fidelity physical move/check audios
-│           ├── store/
-│           │   └── chessStore.ts   # Centralized Zustand store managing entire live match state flow
-│           └── utils/
-│               ├── initialBoard.ts # Helper establishing standard 8x8 standard starting arrays
-│               └── openingBook.ts  # Dictionary linking historical Grandmaster opening move sequences
+server.ts               Express + WebSocket server (dev: Vite middleware, prod: static dist/)
+server/rooms.ts         Authoritative online games: validates every move, runs clocks, handles draws/rematches/reconnects
+server/coach.ts         /api/coach — Gemini with structured JSON output, rate-limited
+server/auth.ts          Google sign-in, sessions, CSRF/origin checks, progress sync (/api/auth/*, /api/me/*)
+server/db.ts            Tiny JSON-file store (atomic writes) — swap for Postgres/MongoDB when you outgrow it
+public/puzzles/         Curated puzzle set (CC0)
+shared/protocol.ts      Typed client/server message protocol
+shared/rules.ts         Result detection shared by client and server
+src/engine/             Stockfish UCI client (Web Worker), bot levels, game review
+src/store/              Zustand stores: game, online, settings, ui
+src/components/board/   Board (pointer events, arrows, promotion), piece assets
+src/components/…        Player bars, clocks, eval bar, move list, panels, dialogs
+public/engine/          Stockfish 19 lite (single-threaded WASM, ~1.8 MB)
 ```
 
----
+**Design decisions**
+- **The server is the referee.** Clients send move *intents*. The server checks each one with `chess.js` and broadcasts the result. A client can't make an illegal move, move out of turn, or change the clocks.
+- **Single-threaded Stockfish build.** It needs no special headers (COOP/COEP), so it runs on any static host and on iOS Safari.
+- **No accounts.** You choose a display name. A random player ID stored on your device reclaims your seat if you reconnect. Real sign-in (OAuth) can be added later without changing the game protocol.
 
-##  Deep Dive: How the AI & Analysis Work
+## Running
 
-### 1. MiniMax Rules Validation & Calculations (`chessEngine.ts`)
-The chess engine implements legal move generation without heavy external dependencies. The core evaluation function assigns strategic value scores based on piece weight metrics:
-*   **Pawn:** 100 points
-*   **Knight:** 320 points
-*   **Bishop:** 330 points
-*   **Rook:** 500 points
-*   **Queen:** 900 points
-*   **King:** 20,000 points
-
-The `minimax` algorithm searches the game tree to a specified depth (controlled by difficulty). It simulates turns back and forth, using **Alpha-Beta Pruning** to cut off computation lines that are guaranteed to yield suboptimal results for the active player, improving response times.
-
-### 2. Real-Time Gemini Coach API (`server.ts`)
-The `/api/analyze` POST route serves as the bridge between your live match and the Gemini model:
-
-```ts
-// Example of the payload format transmitted from the client
-{
-  "board": [ [ { "type": "rook", "color": "black" }, ... ], ... ],
-  "moveHistory": [
-    { "from": { "row": 6, "col": 4 }, "to": { "row": 4, "col": 4 }, "notation": "e4", ... }
-  ],
-  "activeColor": "black"
-}
-```
-
-1.  **Format Board Coordinates:** The server maps the complex 2D array representation into algebraic notation descriptions for the model (e.g., `Rank 4: white pawn at e4; Rank 5: black pawn at e5`).
-2.  **Format Play History:** Translates the move history list into official game score formats (e.g., `1. e4 e5 2. Nf3 Nc6`).
-3.  **Construct Structured Instructions:** The prompt feeds this structured description to `gemini-2.5-flash` with precise coaching guidelines.
-4.  **Schema Enforcement:** To ensure instant rendering without manual parsers, the server requests a strictly validated JSON format:
-
-```json
-{
-  "score": 0.2,
-  "summary": "White controls the central d4 and e4 squares with active development. Black has successfully neutralized immediate pawn tension but needs to develop their light-squared bishop.",
-  "whitePlan": "Prepare a central rook lift, castle kingside, and coordinate a pawn storm on the f-file.",
-  "blackPlan": "Play d6 to solidify the e5 pawn chain, develop the knight to f6, and challenge White's light-squared bishop with Be6.",
-  "lastMoveCommentary": "Playing Nc6 was a high-quality developing move that challenges the center and prepares kingside castling."
-}
-```
-
----
-
-##  Environment Configuration
-
-To unlock full grandmaster-level coaching feedback, create a `.env` file at the root of your project or specify the variable in your environment:
-
-```env
-# Secure Gemini API Key from Google AI Studio
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-*Note: The application will run smoothly with a local material heuristic evaluation fallback if this key is omitted.*
-
----
-
-##  Installation & Running Locally
-
-### 1. Install Dependencies
 ```bash
 npm install
+npm run dev        # http://localhost:3000
+npm run lint       # type-check
+npm run build && npm start   # production
 ```
 
-### 2. Start the Development Server (Full-Stack Mode)
-```bash
-npm run dev
-```
-The server will boot on `http://localhost:3000`. You can play local games, configure AI matches, spin up multiplayer lobbies, or analyze live game boards.
+Optional features. Copy `.env.example` to `.env`, then:
+- **AI Coach:** set `GEMINI_API_KEY`.
+- **Google sign-in:** set `GOOGLE_CLIENT_ID`. To get one:
+  1. In Google Cloud Console, go to **APIs & Services → Credentials → Create credentials → OAuth client ID** and choose **Web application**.
+  2. Under **Authorized JavaScript origins**, add `http://localhost:3000` and your production URL. No client secret or redirect URI is needed.
+  3. Set up the OAuth consent screen (app name and support email).
 
-### 3. Compiling and Bundling for Production
-To build both client and server:
-```bash
-npm run build
-```
-This command compiles the React assets into `dist/` and compiles `server.ts` using `esbuild` into `dist/server.cjs` with `--platform=node` and `--packages=external` configured automatically.
+  Accounts are saved to `data/db.json` (`DATA_DIR`). On hosts with ephemeral disks, such as Cloud Run, mount a volume or move the store to Postgres or MongoDB.
 
-### 4. Running the Production Server
-```bash
-npm run start
-```
+To test on a phone, run `npm run dev` and open `http://<your-computer-LAN-IP>:3000` on the phone.
 
----
+**Hosting:** online play needs a long-running Node process with WebSocket support, such as Render, Railway, Fly.io or Cloud Run. Serverless platforms that don't support WebSockets (for example Vercel functions) can host everything except online play.
 
+## Licences
+
+- Stockfish is GPLv3. See `public/engine/STOCKFISH-LICENSE.txt`. Serving the unmodified engine binary is fine; if you change it, you must publish the source.
+- Puzzles come from the Lichess puzzle database (CC0).
+- The cburnett pieces are by Colin M.L. Burnett. See `public/pieces/LICENSE.txt`.
