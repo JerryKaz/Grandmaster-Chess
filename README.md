@@ -46,7 +46,7 @@ The old version used Unicode piece glyphs, a fixed 10-minute clock and three cro
 - Hint, retry, show solution, and "Analyse this puzzle" on the analysis board. Any checkmating move is accepted, even if it differs from the stored solution.
 
 **Accounts and online multiplayer**
-- **Create an account** with email and password, or **continue with Google**. Online play requires an account; everything else works as a guest.
+- **Sign in the usual way:** Continue with Apple or Continue with Google, or create an account with email (with a "Log in" link for returning email users). Apple and Google create the account automatically on first use, and an Apple or Google sign-in links to an existing email account with the same verified address. Online play requires an account; everything else works as a guest.
 - **Quick match:** pick a time control (bullet, blitz or rapid) and get paired with the closest-rated player waiting for the same game. These games are **rated** (Elo, starting at 1500). Games aborted before both players move don't count.
 - **Play a friend:** create a casual game and share the link or code. Anyone without an account who opens the link can watch as a spectator.
 - Your rating, win/draw/loss record, puzzle rating and game history sync across devices.
@@ -54,7 +54,8 @@ The old version used Unicode piece glyphs, a fixed 10-minute clock and three cro
   - Passwords are hashed with scrypt.
   - Login errors don't reveal which emails exist, and repeated failures are locked out for 15 minutes.
   - Sessions use a random token in an httpOnly, SameSite=Lax cookie, stored server-side only as a SHA-256 hash.
-  - Google ID tokens are verified with `google-auth-library`. A Google sign-in links to an existing email account with the same verified address.
+  - Google ID tokens are verified with `google-auth-library`.
+  - Apple ID tokens are verified against Apple's public keys (`jose`), with a one-time nonce bound to the browser to stop token replay.
 
 **Improve**
 - **Game review:** every move is classified (Book, Best, Excellent, Good, Inaccuracy, Mistake, Blunder) with Lichess-style accuracy, an evaluation graph and best-move arrows.
@@ -102,6 +103,13 @@ Optional features. Copy `.env.example` to `.env`, then:
   1. In Google Cloud Console, go to **APIs & Services → Credentials → Create credentials → OAuth client ID** and choose **Web application**.
   2. Under **Authorized JavaScript origins**, add `http://localhost:3000` and your production URL. No client secret or redirect URI is needed.
   3. Set up the OAuth consent screen (app name and support email).
+
+- **Sign in with Apple:** set `APPLE_CLIENT_ID` and `APPLE_REDIRECT_URI`. This needs a paid Apple Developer account:
+  1. In Certificates, Identifiers & Profiles, create an **App ID** with *Sign in with Apple* enabled.
+  2. Create a **Services ID**. That is your `APPLE_CLIENT_ID`, for example `com.yourname.grandmaster.web`.
+  3. On the Services ID, configure *Sign in with Apple*: add your domain and a **Return URL** such as `https://your-domain.com/`. That is your `APPLE_REDIRECT_URI`.
+
+  Apple only accepts HTTPS domains, so Apple sign-in works on your deployed site, not on `localhost`. During development, unconfigured providers show as greyed-out "Dev only" buttons; in production they are hidden.
 
   Accounts are saved to `data/db.json` (`DATA_DIR`). On hosts with ephemeral disks, such as Cloud Run, mount a volume or move the store to Postgres or MongoDB.
 

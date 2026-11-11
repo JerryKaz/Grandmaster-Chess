@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import type { IncomingMessage } from 'node:http';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { db, type PuzzleProgress, type UserRecord } from './db';
 
 const COOKIE = 'gm_session';
@@ -11,6 +12,13 @@ const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const isProd = process.env.NODE_ENV === 'production';
 
 const google = CLIENT_ID ? new OAuth2Client(CLIENT_ID) : null;
+
+// Sign in with Apple: Services ID (e.g. com.example.chess.web) and the HTTPS return URL registered for it.
+const APPLE_CLIENT_ID = process.env.APPLE_CLIENT_ID || '';
+const APPLE_REDIRECT_URI = process.env.APPLE_REDIRECT_URI || '';
+const appleEnabled = !!(APPLE_CLIENT_ID && APPLE_REDIRECT_URI);
+const appleKeys = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
+const APPLE_NONCE_COOKIE = 'gm_apple_nonce';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
@@ -47,6 +55,7 @@ export function publicUser(u: UserRecord) {
     rating: Math.round(u.rating),
     record: u.record,
     hasGoogle: !!u.googleSub,
+    hasApple: !!u.appleSub,
     hasPassword: !!u.passwordHash,
   };
 }
@@ -190,7 +199,57 @@ export function authRouter() {
   const r = Router();
   r.use(sameOrigin);
 
-  r.get('/auth/config', (_req, res) => res.json({ googleClientId: CLIENT_ID || null }));
+  r.get('/auth/config', (_req, res) =>
+    res.json({
+      googleClientId: CLIENT_ID || null,
+      apple: appleEnabled ? { clientId: APPLE_CLIENT_ID, redirectURI: APPLE_REDIRECT_URI } : null,
+    }),
+  );
+
+  // One-time nonce for Sign in with Apple, bound to this browser by an httpOnly cookie (prevents token replay).
+  r.post('/auth/apple/nonce', (_req, res) => {
+    if (!appleEnabled) return res.status(503).json({ error: 'Sign in with Apple is not configured on this server.' });
+    const nonce = randomBytes(16).toString('base64url');
+    res.cookie(APPLE_NONCE_COOKIE, nonce, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/api/auth/apple', maxAge: 10 * 60 * 1000 });
+    res.json({ nonce });
+  });
+
+  r.post('/auth/apple', async (req, res) => {
+    if (!appleEnabled) return res.status(503).json({ error: 'Sign in with Apple is not configured on this server.' });
+    const idToken = typeof req.body?.idToken === 'string' ? req.body.idToken : '';
+    const expectedNonce = parseCookies(req.headers.cookie)[APPLE_NONCE_COOKIE];
+    res.clearCookie(APPLE_NONCE_COOKIE, { path: '/api/auth/apple' });
+    if (!idToken || idToken.length > 8192 || !expectedNonce) return res.status(400).json({ error: 'Sign in with Apple failed. Please try again.' });
+    try {
+      const { payload } = await jwtVerify(idToken, appleKeys, { issuer: 'https://appleid.apple.com', audience: APPLE_CLIENT_ID });
+      if (payload.nonce !== expectedNonce || typeof payload.sub !== 'string') throw new Error('nonce mismatch');
+      const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
+      const emailVerified = payload.email_verified === true || payload.email_verified === 'true';
+
+      // Apple only sends the user's name (from the browser, not the token) the very first time.
+      const given = req.body?.name && typeof req.body.name === 'object' ? req.body.name : {};
+      const fullName = cleanName([given.firstName, given.lastName].filter((x) => typeof x === 'string').join(' '));
+
+      const now = Date.now();
+      const existing = db.userByAppleSub(payload.sub) ?? (email && emailVerified ? db.userByEmail(email) : undefined);
+      const user: UserRecord = existing
+        ? { ...existing, appleSub: payload.sub, lastLoginAt: now }
+        : db.newUser({
+            id: randomUUID(),
+            appleSub: payload.sub,
+            email,
+            name: fullName || (email && !email.endsWith('privaterelay.appleid.com') ? cleanName(email.split('@')[0]) : '') || 'Player',
+            createdAt: now,
+            lastLoginAt: now,
+          });
+      db.saveUser(user);
+      startSession(res, user);
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      console.warn('[auth] Apple token verification failed:', (err as Error).message);
+      res.status(401).json({ error: 'Sign in with Apple failed. Please try again.' });
+    }
+  });
 
   r.post('/auth/google', async (req, res) => {
     if (!google) return res.status(503).json({ error: 'Google sign-in is not configured on this server.' });

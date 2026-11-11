@@ -65,7 +65,7 @@ export function AccountDialog({ open, onClose }: { open: boolean; onClose: () =>
             <Stat value={<span className="text-rose-400">{user.record.l}</span>} label="Losses" />
           </div>
           <p className="text-xs text-zinc-400">
-            Signed in with {user.hasGoogle && user.hasPassword ? 'email and Google' : user.hasGoogle ? 'Google' : 'email'}. Your ratings and game history sync across your devices.
+            Signed in with {[user.hasApple && 'Apple', user.hasGoogle && 'Google', user.hasPassword && 'email'].filter(Boolean).join(', ')}. Your ratings and game history sync across your devices.
           </p>
           <Button
             onClick={() => {
@@ -78,7 +78,7 @@ export function AccountDialog({ open, onClose }: { open: boolean; onClose: () =>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-zinc-300">Create a free account to play rated games online, keep your ratings and sync your games across devices.</p>
+          <p className="text-sm text-zinc-300">Sign in or create a free account to play rated games online, keep your ratings and sync your games across devices.</p>
           <AuthForm />
         </div>
       )}

@@ -50,7 +50,6 @@ function Seeking() {
 export function OnlineLobby() {
   const user = useAuth((s) => s.user);
   const ready = useAuth((s) => s.ready);
-  const clientId = useAuth((s) => s.clientId);
   const online = useOnline();
   const [mode, setMode] = useState<'quick' | 'friend'>('quick');
   const [friendTc, setFriendTc] = useState(4);
@@ -66,7 +65,7 @@ export function OnlineLobby() {
           <div className="mb-1 flex items-center gap-2 font-semibold text-white">
             <Swords size={16} className="text-emerald-300" /> Play people online
           </div>
-          Create a free account{clientId ? ' (or continue with Google)' : ''} to get matched with players, earn a rating and challenge friends.
+          Sign in or create a free account to get matched with players, earn a rating and challenge friends.
         </div>
         <AuthForm />
       </div>

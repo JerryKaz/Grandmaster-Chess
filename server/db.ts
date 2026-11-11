@@ -19,6 +19,8 @@ export interface UserRecord {
   id: string;
   /** Google account id, when the user signed in with Google (or linked it). */
   googleSub: string | null;
+  /** Apple account id, when the user signed in with Apple (or linked it). */
+  appleSub: string | null;
   /** scrypt hash, when the user created an email + password account. */
   passwordHash: string | null;
   email: string;
@@ -53,6 +55,7 @@ const FILE = path.join(DATA_DIR, 'db.json');
 function normalize(u: Partial<UserRecord> & { id: string }): UserRecord {
   return {
     googleSub: null,
+    appleSub: null,
     passwordHash: null,
     email: '',
     name: 'Player',
@@ -100,6 +103,9 @@ export const db = {
   },
   userBySub(sub: string): UserRecord | undefined {
     return Object.values(data.users).find((u) => u.googleSub === sub);
+  },
+  userByAppleSub(sub: string): UserRecord | undefined {
+    return Object.values(data.users).find((u) => u.appleSub === sub);
   },
   userByEmail(email: string): UserRecord | undefined {
     const e = email.toLowerCase();

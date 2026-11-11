@@ -10,17 +10,26 @@ export interface AuthUser {
   rating: number;
   record: { w: number; l: number; d: number };
   hasGoogle: boolean;
+  hasApple: boolean;
   hasPassword: boolean;
+}
+
+export interface AppleConfig {
+  clientId: string;
+  redirectURI: string;
 }
 
 interface AuthState {
   /** Google client id from the server; null when sign-in is not configured. */
   clientId: string | null;
+  /** Sign in with Apple settings from the server; null when not configured. */
+  apple: AppleConfig | null;
   ready: boolean;
   user: AuthUser | null;
   busy: boolean;
   init: () => Promise<void>;
   signInWithCredential: (credential: string) => Promise<void>;
+  signInWithApple: () => Promise<void>;
   /** Email + password. Resolve to an error message, or null on success. */
   signUp: (name: string, email: string, password: string) => Promise<string | null>;
   logIn: (email: string, password: string) => Promise<string | null>;
@@ -49,6 +58,7 @@ async function postJson(url: string, body: unknown) {
 
 export const useAuth = create<AuthState>((set, get) => ({
   clientId: null,
+  apple: null,
   ready: false,
   user: null,
   busy: false,
@@ -59,7 +69,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         fetch('/api/auth/config').then((r) => r.json()),
         fetch('/api/auth/me', { credentials: 'same-origin' }).then((r) => r.json()),
       ]);
-      set({ clientId: config.googleClientId ?? null, user: me.user ?? null, ready: true });
+      set({ clientId: config.googleClientId ?? null, apple: config.apple ?? null, user: me.user ?? null, ready: true });
       if (me.user) onSignedIn?.();
     } catch {
       set({ ready: true }); // offline or server without auth: play as guest
@@ -83,6 +93,39 @@ export const useAuth = create<AuthState>((set, get) => ({
       onAuthChanged?.();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Sign-in failed');
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  signInWithApple: async () => {
+    const apple = get().apple;
+    if (!apple) return;
+    set({ busy: true });
+    try {
+      await loadAppleId();
+      const { ok: nonceOk, data: nonceData } = await postJson('/api/auth/apple/nonce', {});
+      if (!nonceOk) throw new Error(nonceData.error || 'Sign in with Apple is unavailable');
+      window.AppleID!.auth.init({
+        clientId: apple.clientId,
+        scope: 'name email',
+        redirectURI: apple.redirectURI,
+        state: Math.random().toString(36).slice(2),
+        nonce: nonceData.nonce,
+        usePopup: true,
+      });
+      const result = await window.AppleID!.auth.signIn();
+      const { ok, data } = await postJson('/api/auth/apple', { idToken: result.authorization.id_token, name: result.user?.name ?? null });
+      if (!ok) throw new Error(data.error || 'Sign in with Apple failed');
+      set({ user: data.user });
+      toast(`Signed in as ${data.user.name}`);
+      onSignedIn?.();
+      onAuthChanged?.();
+    } catch (err) {
+      const code = (err as { error?: string })?.error;
+      if (code !== 'popup_closed_by_user' && code !== 'user_cancelled_authorize') {
+        toast(err instanceof Error ? err.message : 'Sign in with Apple failed');
+      }
     } finally {
       set({ busy: false });
     }
@@ -182,4 +225,37 @@ export function loadGoogleIdentity(clientId: string): Promise<void> {
     });
     gisInitializedFor = clientId;
   });
+}
+
+// ---- Sign in with Apple JS loader ----
+
+interface AppleSignInResult {
+  authorization: { id_token: string; code: string; state?: string };
+  user?: { email?: string; name?: { firstName?: string; lastName?: string } };
+}
+declare global {
+  interface Window {
+    AppleID?: {
+      auth: {
+        init: (cfg: { clientId: string; scope: string; redirectURI: string; state?: string; nonce?: string; usePopup: boolean }) => void;
+        signIn: () => Promise<AppleSignInResult>;
+      };
+    };
+  }
+}
+
+let appleLoading: Promise<void> | null = null;
+function loadAppleId(): Promise<void> {
+  appleLoading ??= new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      appleLoading = null;
+      reject(new Error('Could not load Sign in with Apple'));
+    };
+    document.head.appendChild(script);
+  });
+  return appleLoading;
 }
