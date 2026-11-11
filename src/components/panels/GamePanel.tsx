@@ -31,7 +31,7 @@ function ModeTitle() {
   const room = useOnline((s) => s.room);
   const tc = meta.tc.initial > 0 ? `${meta.tc.initial / 60}${meta.tc.increment ? ` | ${meta.tc.increment}` : ' min'}` : 'Unlimited';
   const title =
-    mode === 'bot' ? `vs ${getBotLevel(meta.botLevel).name}` : mode === 'local' ? 'Pass & play' : mode === 'online' ? `Online · ${room?.id ?? ''}` : 'Analysis';
+    mode === 'bot' ? `vs ${getBotLevel(meta.botLevel).name}` : mode === 'local' ? 'Pass & play' : mode === 'online' ? `${room?.rated ? 'Rated' : 'Casual'} · ${room?.id ?? ''}` : 'Analysis';
   return (
     <div className="flex items-baseline justify-between gap-2">
       <h2 className="font-semibold text-white">{title}</h2>

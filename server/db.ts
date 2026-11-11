@@ -17,12 +17,18 @@ export interface PuzzleProgress {
 
 export interface UserRecord {
   id: string;
-  googleSub: string;
+  /** Google account id, when the user signed in with Google (or linked it). */
+  googleSub: string | null;
+  /** scrypt hash, when the user created an email + password account. */
+  passwordHash: string | null;
   email: string;
   name: string;
   picture: string | null;
   createdAt: number;
   lastLoginAt: number;
+  /** Online rating (rated games only) and results. */
+  rating: number;
+  record: { w: number; l: number; d: number };
   puzzle: PuzzleProgress | null;
   /** Finished games (same shape as the client archive), newest first, max 50. */
   archive: unknown[];
@@ -38,12 +44,36 @@ interface Data {
   sessions: Record<string, SessionRecord>; // keyed by sha256(token)
 }
 
+export const START_RATING = 1500;
+
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const FILE = path.join(DATA_DIR, 'db.json');
 
+/** Fill in fields added after a record was first written. */
+function normalize(u: Partial<UserRecord> & { id: string }): UserRecord {
+  return {
+    googleSub: null,
+    passwordHash: null,
+    email: '',
+    name: 'Player',
+    picture: null,
+    createdAt: Date.now(),
+    lastLoginAt: Date.now(),
+    rating: START_RATING,
+    record: { w: 0, l: 0, d: 0 },
+    puzzle: null,
+    archive: [],
+    ...u,
+  };
+}
+
 let data: Data = { users: {}, sessions: {} };
 try {
-  if (existsSync(FILE)) data = { users: {}, sessions: {}, ...JSON.parse(readFileSync(FILE, 'utf8')) };
+  if (existsSync(FILE)) {
+    const raw = JSON.parse(readFileSync(FILE, 'utf8'));
+    data = { users: {}, sessions: raw.sessions ?? {} };
+    for (const [id, u] of Object.entries(raw.users ?? {})) data.users[id] = normalize(u as UserRecord);
+  }
 } catch (err) {
   console.error('[db] could not read store, starting empty:', err);
 }
@@ -65,8 +95,15 @@ function persist() {
 }
 
 export const db = {
+  newUser(fields: Partial<UserRecord> & { id: string }): UserRecord {
+    return normalize(fields);
+  },
   userBySub(sub: string): UserRecord | undefined {
     return Object.values(data.users).find((u) => u.googleSub === sub);
+  },
+  userByEmail(email: string): UserRecord | undefined {
+    const e = email.toLowerCase();
+    return Object.values(data.users).find((u) => u.email.toLowerCase() === e);
   },
   user(id: string): UserRecord | undefined {
     return data.users[id];

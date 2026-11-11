@@ -44,6 +44,15 @@ export function GameOverDialog() {
         </div>
         <h2 className="text-2xl font-bold text-white">{headline}</h2>
         <p className="mt-1 text-sm text-zinc-400">{describeResult(result)}</p>
+        {mode === 'online' && room?.you && room.ratingChange && (
+          <p className="mt-3 rounded-full bg-black/30 px-4 py-1.5 text-sm font-semibold text-white">
+            Rating{' '}
+            <span className={room.ratingChange[room.you] >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+              {room.ratingChange[room.you] >= 0 ? '+' : ''}
+              {room.ratingChange[room.you]}
+            </span>
+          </p>
+        )}
       </div>
       <div className="mt-6 flex flex-col gap-2">
         <Button

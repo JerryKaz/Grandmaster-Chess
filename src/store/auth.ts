@@ -6,6 +6,11 @@ export interface AuthUser {
   name: string;
   email: string;
   picture: string | null;
+  /** Online rating and record from rated games. */
+  rating: number;
+  record: { w: number; l: number; d: number };
+  hasGoogle: boolean;
+  hasPassword: boolean;
 }
 
 interface AuthState {
@@ -16,6 +21,10 @@ interface AuthState {
   busy: boolean;
   init: () => Promise<void>;
   signInWithCredential: (credential: string) => Promise<void>;
+  /** Email + password. Resolve to an error message, or null on success. */
+  signUp: (name: string, email: string, password: string) => Promise<string | null>;
+  logIn: (email: string, password: string) => Promise<string | null>;
+  refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -23,7 +32,22 @@ interface AuthState {
 let onSignedIn: (() => void) | null = null;
 export const setOnSignedIn = (fn: () => void) => (onSignedIn = fn);
 
-export const useAuth = create<AuthState>((set) => ({
+/** Called whenever the signed-in user changes (online play must reconnect to pick up the new session). */
+let onAuthChanged: (() => void) | null = null;
+export const setOnAuthChanged = (fn: () => void) => (onAuthChanged = fn);
+
+async function postJson(url: string, body: unknown) {
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, data };
+}
+
+export const useAuth = create<AuthState>((set, get) => ({
   clientId: null,
   ready: false,
   user: null,
@@ -56,10 +80,55 @@ export const useAuth = create<AuthState>((set) => ({
       set({ user: data.user });
       toast(`Signed in as ${data.user.name}`);
       onSignedIn?.();
+      onAuthChanged?.();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Sign-in failed');
     } finally {
       set({ busy: false });
+    }
+  },
+
+  signUp: async (name, email, password) => {
+    set({ busy: true });
+    try {
+      const { ok, data } = await postJson('/api/auth/signup', { name, email, password });
+      if (!ok) return data.error || 'Could not create your account.';
+      set({ user: data.user });
+      toast(`Welcome, ${data.user.name}!`);
+      onSignedIn?.();
+      onAuthChanged?.();
+      return null;
+    } catch {
+      return 'Network error. Check your connection.';
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  logIn: async (email, password) => {
+    set({ busy: true });
+    try {
+      const { ok, data } = await postJson('/api/auth/login', { email, password });
+      if (!ok) return data.error || 'Could not log in.';
+      set({ user: data.user });
+      toast(`Signed in as ${data.user.name}`);
+      onSignedIn?.();
+      onAuthChanged?.();
+      return null;
+    } catch {
+      return 'Network error. Check your connection.';
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  refresh: async () => {
+    if (!get().user) return;
+    try {
+      const me = await fetch('/api/auth/me', { credentials: 'same-origin' }).then((r) => r.json());
+      set({ user: me.user ?? null });
+    } catch {
+      /* keep the cached profile */
     }
   },
 
@@ -71,6 +140,7 @@ export const useAuth = create<AuthState>((set) => ({
     }
     window.google?.accounts.id.disableAutoSelect();
     set({ user: null });
+    onAuthChanged?.();
     toast('Signed out');
   },
 }));

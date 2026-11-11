@@ -12,6 +12,7 @@ import {
   type TimeControl,
 } from '../shared/protocol';
 import { parseUci, positionResult, timeoutResult } from '../shared/rules';
+import { db } from './db';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_IDLE_TTL_MS = 2 * 60 * 60 * 1000;
@@ -22,6 +23,7 @@ interface Seat {
   playerId: string;
   name: string;
   verified: boolean;
+  accountId: string | null;
   sockets: Set<WebSocket>;
   abandonTimer: NodeJS.Timeout | null;
 }
@@ -40,6 +42,8 @@ interface Room {
   spectators: Set<WebSocket>;
   lastActivity: number;
   flagTimer: NodeJS.Timeout | null;
+  rated: boolean;
+  ratingChange: { w: number; b: number } | null;
 }
 
 export interface ConnectionContext {
@@ -78,6 +82,100 @@ function newRoomId(): string {
   }
 }
 
+function newSeat(ctx: ConnectionContext): Seat {
+  return { playerId: ctx.playerId!, name: ctx.name, verified: !!ctx.account, accountId: ctx.account?.id ?? null, sockets: new Set(), abandonTimer: null };
+}
+
+function newRoom(tc: TimeControl, rated: boolean): Room {
+  const room: Room = {
+    id: newRoomId(),
+    tc,
+    seats: { w: null, b: null },
+    chess: new Chess(),
+    moves: [],
+    clock: null,
+    turnStartedAt: null,
+    result: null,
+    drawOffer: null,
+    rematchOffer: null,
+    spectators: new Set(),
+    lastActivity: Date.now(),
+    flagTimer: null,
+    rated,
+    ratingChange: null,
+  };
+  resetGame(room);
+  rooms.set(room.id, room);
+  return room;
+}
+
+// ---- Ratings (Elo; new players move faster) ----
+
+function applyRatings(room: Room, result: GameResult) {
+  const w = room.seats.w?.accountId ? db.user(room.seats.w.accountId) : undefined;
+  const b = room.seats.b?.accountId ? db.user(room.seats.b.accountId) : undefined;
+  // Unrated: casual game, guest seat, self-play, or aborted before both players moved.
+  if (!room.rated || !w || !b || w.id === b.id || room.moves.length < 2) return;
+  const score = result.winner === 'w' ? 1 : result.winner === 'b' ? 0 : 0.5;
+  const expected = 1 / (1 + 10 ** ((b.rating - w.rating) / 400));
+  const k = (u: typeof w) => (u.record.w + u.record.l + u.record.d < 30 ? 40 : 20);
+  const dw = Math.round(k(w) * (score - expected));
+  const dbDelta = Math.round(k(b) * (1 - score - (1 - expected)));
+  const bump = (rec: { w: number; l: number; d: number }, s: number) => ({ w: rec.w + (s === 1 ? 1 : 0), l: rec.l + (s === 0 ? 1 : 0), d: rec.d + (s === 0.5 ? 1 : 0) });
+  db.saveUser({ ...w, rating: Math.max(100, w.rating + dw), record: bump(w.record, score) });
+  db.saveUser({ ...b, rating: Math.max(100, b.rating + dbDelta), record: bump(b.record, 1 - score) });
+  room.ratingChange = { w: dw, b: dbDelta };
+}
+
+// ---- Matchmaking ----
+
+interface Seeker {
+  ws: WebSocket;
+  ctx: ConnectionContext;
+  since: number;
+}
+const queues = new Map<string, Seeker[]>();
+const tcKey = (tc: TimeControl) => `${tc.initial}+${tc.increment}`;
+
+function leaveQueues(ws: WebSocket) {
+  for (const [key, list] of queues) {
+    const next = list.filter((s) => s.ws !== ws);
+    if (next.length) queues.set(key, next);
+    else queues.delete(key);
+  }
+}
+
+function seek(ws: WebSocket, ctx: ConnectionContext, tc: TimeControl) {
+  leaveQueues(ws);
+  detach(ws, ctx);
+  const key = tcKey(tc);
+  const list = (queues.get(key) ?? []).filter((s) => s.ws.readyState === s.ws.OPEN);
+  const myRating = db.user(ctx.account!.id)?.rating ?? 1500;
+  // Closest rating among waiting players, never yourself (e.g. a second tab).
+  let best = -1;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].ctx.account?.id === ctx.account!.id) continue;
+    const r = db.user(list[i].ctx.account!.id)?.rating ?? 1500;
+    const bestR = best === -1 ? Infinity : Math.abs((db.user(list[best].ctx.account!.id)?.rating ?? 1500) - myRating);
+    if (Math.abs(r - myRating) < bestR) best = i;
+  }
+  if (best === -1) {
+    list.push({ ws, ctx, since: Date.now() });
+    queues.set(key, list);
+    return send(ws, { t: 'seeking', tc, waiting: list.length - 1 });
+  }
+  const [opp] = list.splice(best, 1);
+  if (list.length) queues.set(key, list);
+  else queues.delete(key);
+
+  const room = newRoom(tc, true);
+  const meWhite = randomInt(2) === 0;
+  room.seats[meWhite ? 'w' : 'b'] = newSeat(ctx);
+  room.seats[meWhite ? 'b' : 'w'] = newSeat(opp.ctx);
+  attach(opp.ws, opp.ctx, room);
+  attach(ws, ctx, room);
+}
+
 function send(ws: WebSocket, msg: ServerMessage) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
 }
@@ -101,7 +199,15 @@ function remaining(room: Room, now: number): { w: number; b: number } | null {
 
 function snapshot(room: Room, you: Side | null): RoomSnapshot {
   const now = Date.now();
-  const seatInfo = (s: Seat | null) => (s ? { name: s.name, connected: s.sockets.size > 0, verified: s.verified } : null);
+  const seatInfo = (s: Seat | null) =>
+    s
+      ? {
+          name: s.name,
+          connected: s.sockets.size > 0,
+          verified: s.verified,
+          rating: s.accountId ? Math.round(db.user(s.accountId)?.rating ?? 1500) : null,
+        }
+      : null;
   return {
     id: room.id,
     tc: room.tc,
@@ -115,6 +221,8 @@ function snapshot(room: Room, you: Side | null): RoomSnapshot {
     drawOffer: room.drawOffer,
     rematchOffer: room.rematchOffer,
     you,
+    rated: room.rated,
+    ratingChange: room.ratingChange,
   };
 }
 
@@ -141,6 +249,7 @@ function finish(room: Room, result: GameResult) {
   }
   room.result = result;
   room.turnStartedAt = null;
+  applyRatings(room, result);
   room.drawOffer = null;
   room.rematchOffer = null;
   clearTimers(room);
@@ -178,6 +287,7 @@ function resetGame(room: Room) {
   room.result = null;
   room.drawOffer = null;
   room.rematchOffer = null;
+  room.ratingChange = null;
   clearTimers(room);
 }
 
@@ -212,10 +322,10 @@ function attach(ws: WebSocket, ctx: ConnectionContext, room: Room) {
   room.lastActivity = Date.now();
 
   let side = seatOf(room, ctx.playerId);
-  if (!side && ctx.playerId) {
+  if (!side && ctx.playerId && ctx.account) {
     // Take an open seat if there is one.
     side = !room.seats.w ? 'w' : !room.seats.b ? 'b' : null;
-    if (side) room.seats[side] = { playerId: ctx.playerId, name: ctx.name, verified: !!ctx.account, sockets: new Set(), abandonTimer: null };
+    if (side) room.seats[side] = newSeat(ctx);
   }
   if (side) {
     const seat = room.seats[side]!;
@@ -248,29 +358,28 @@ export function handleMessage(ws: WebSocket, ctx: ConnectionContext, msg: Client
 
   if (!ctx.playerId) return fail('Say hello first');
 
+  if (msg.t === 'seek') {
+    if (!ctx.account) return fail('Sign in to play online');
+    const tc = validTimeControl(msg.tc);
+    if (!tc || tc.initial === 0) return fail('Pick a timed game for Quick match');
+    if (rooms.size >= MAX_ROOMS) return fail('Server is busy, please try again later');
+    return seek(ws, ctx, tc);
+  }
+
+  if (msg.t === 'cancelSeek') {
+    leaveQueues(ws);
+    return send(ws, { t: 'seekCancelled' });
+  }
+
   if (msg.t === 'create') {
+    if (!ctx.account) return fail('Sign in to play online');
     const tc = validTimeControl(msg.tc);
     if (!tc) return fail('Invalid time control');
     if (rooms.size >= MAX_ROOMS) return fail('Server is busy, please try again later');
-    const room: Room = {
-      id: newRoomId(),
-      tc,
-      seats: { w: null, b: null },
-      chess: new Chess(),
-      moves: [],
-      clock: null,
-      turnStartedAt: null,
-      result: null,
-      drawOffer: null,
-      rematchOffer: null,
-      spectators: new Set(),
-      lastActivity: Date.now(),
-      flagTimer: null,
-    };
-    resetGame(room);
+    leaveQueues(ws);
+    const room = newRoom(tc, false); // games with friends are casual (unrated)
     const color: Side = msg.color === 'w' || msg.color === 'b' ? msg.color : randomInt(2) ? 'w' : 'b';
-    room.seats[color] = { playerId: ctx.playerId, name: ctx.name, verified: !!ctx.account, sockets: new Set(), abandonTimer: null };
-    rooms.set(room.id, room);
+    room.seats[color] = newSeat(ctx);
     return attach(ws, ctx, room);
   }
 
@@ -278,6 +387,7 @@ export function handleMessage(ws: WebSocket, ctx: ConnectionContext, msg: Client
     const id = String(msg.room ?? '').trim().toUpperCase();
     const room = ROOM_CODE_RE.test(id) ? rooms.get(id) : undefined;
     if (!room) return fail('Game not found. Check the code and try again.');
+    leaveQueues(ws);
     return attach(ws, ctx, room);
   }
 
@@ -353,6 +463,7 @@ export function handleMessage(ws: WebSocket, ctx: ConnectionContext, msg: Client
 }
 
 export function handleClose(ws: WebSocket, ctx: ConnectionContext) {
+  leaveQueues(ws);
   detach(ws, ctx);
 }
 

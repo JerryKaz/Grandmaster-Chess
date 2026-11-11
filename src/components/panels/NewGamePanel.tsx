@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import { Bot, Globe, Users, Loader2, LogIn } from 'lucide-react';
+import { Bot, Globe, Users } from 'lucide-react';
 import { BOT_LEVELS } from '../../engine/bots';
 import type { Side, TimeControl } from '../../lib/types';
 import { useGame } from '../../store/game';
-import { useOnline } from '../../store/online';
-import { useSettings } from '../../store/settings';
 import { unlockAudio } from '../../lib/sound';
 import { load, save } from '../../lib/storage';
 import { Button, Label, Segmented, cx } from '../ui/kit';
+import { OnlineLobby } from './OnlineLobby';
 
 export const TIME_CONTROLS: { id: string; label: string; group: string; tc: TimeControl }[] = [
   { id: 'none', label: '∞', group: 'Unlimited', tc: { initial: 0, increment: 0 } },
@@ -58,20 +57,19 @@ function ColorPicker({ value, onChange }: { value: Side | 'random'; onChange: (v
 }
 
 export function NewGamePanel() {
-  const [tab, setTab] = useState<Tab>('bot');
+  const [tab, setTabState] = useState<Tab>(() => load<Tab>('gm-last-tab', 'bot'));
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    save('gm-last-tab', t);
+  };
   const [level, setLevel] = useState(() => load<number>('gm-last-level', 3));
   const [color, setColor] = useState<Side | 'random'>('w');
   const [tcId, setTcId] = useState('none');
-  const [onlineTcId, setOnlineTcId] = useState('5+0');
-  const [code, setCode] = useState('');
-  const playerName = useSettings((s) => s.playerName);
-  const setSettings = useSettings((s) => s.set);
-  const online = useOnline();
   const tcOf = (id: string) => TIME_CONTROLS.find((t) => t.id === id)!.tc;
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'bot', label: 'Computer', icon: <Bot size={18} /> },
-    { id: 'online', label: 'Friend', icon: <Globe size={18} /> },
+    { id: 'online', label: 'Online', icon: <Globe size={18} /> },
     { id: 'local', label: 'Pass & play', icon: <Users size={18} /> },
   ];
 
@@ -140,66 +138,7 @@ export function NewGamePanel() {
         </>
       )}
 
-      {tab === 'online' && (
-        <>
-          <div>
-            <Label>Your name</Label>
-            <input
-              value={playerName}
-              onChange={(e) => setSettings({ playerName: e.target.value.slice(0, 24) })}
-              placeholder="Guest"
-              maxLength={24}
-              className="h-11 w-full rounded-lg bg-black/30 px-3 text-sm text-white ring-1 ring-white/10 outline-none placeholder:text-zinc-500 focus:ring-emerald-400"
-            />
-          </div>
-          <div className="rounded-xl bg-black/20 p-3">
-            <Label>Create a game</Label>
-            <div className="flex flex-col gap-3">
-              <TimePicker value={onlineTcId} onChange={setOnlineTcId} />
-              <ColorPicker value={color} onChange={setColor} />
-              <Button
-                variant="primary"
-                disabled={online.busy}
-                onClick={() => {
-                  unlockAudio();
-                  online.create(tcOf(onlineTcId), color);
-                }}
-              >
-                {online.busy ? <Loader2 size={18} className="animate-spin" /> : null}
-                Create & invite
-              </Button>
-            </div>
-          </div>
-          <form
-            className="rounded-xl bg-black/20 p-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              unlockAudio();
-              online.join(code);
-            }}
-          >
-            <Label>Join with a code</Label>
-            <div className="flex gap-2">
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
-                placeholder="ABC234"
-                inputMode="text"
-                autoCapitalize="characters"
-                autoComplete="off"
-                aria-label="Game code"
-                className="h-11 min-w-0 flex-1 rounded-lg bg-black/30 px-3 font-mono text-base tracking-[0.3em] text-white uppercase ring-1 ring-white/10 outline-none placeholder:text-zinc-600 focus:ring-emerald-400"
-              />
-              <Button type="submit" disabled={code.length !== 6 || online.busy}>
-                <LogIn size={18} />
-                Join
-              </Button>
-            </div>
-          </form>
-          {online.error && <p className="text-sm text-rose-400" role="alert">{online.error}</p>}
-          {online.conn === 'reconnecting' && <p className="text-xs text-amber-300">Reconnecting to the server…</p>}
-        </>
-      )}
+      {tab === 'online' && <OnlineLobby />}
 
       {tab === 'local' && (
         <>

@@ -46,7 +46,6 @@ function Header({ onArchive, onAccount }: { onArchive: () => void; onAccount: ()
   const view = useUi((s) => s.view);
   const setView = useUi((s) => s.setView);
   const authReady = useAuth((s) => s.ready);
-  const clientId = useAuth((s) => s.clientId);
   const user = useAuth((s) => s.user);
   const navBtn = (active: boolean) =>
     cx('flex h-10 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm sm:gap-2 sm:px-3 font-semibold transition', active ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/8 hover:text-white');
@@ -108,7 +107,7 @@ function Header({ onArchive, onAccount }: { onArchive: () => void; onAccount: ()
         </nav>
         <IconButton label="Your games" onClick={onArchive}><History size={20} /></IconButton>
         <IconButton label="Settings" onClick={() => useUi.getState().setSettingsOpen(true)}><Settings size={20} /></IconButton>
-        {authReady && (clientId || user) && (
+        {authReady && (
           <IconButton label={user ? 'Your account' : 'Sign in'} onClick={onAccount} className="ml-0.5">
             <Avatar size={30} />
           </IconButton>
@@ -221,7 +220,13 @@ export default function App() {
       <PlayerBar
         side={side}
         name={status === 'setup' ? (side === orientation ? 'You' : 'Opponent') : name}
-        subtitle={you ? '(you)' : isBot ? getBotLevel(meta.botLevel).elo : undefined}
+        subtitle={
+          mode === 'online' && seat
+            ? [seat.rating !== null ? String(seat.rating) : null, you ? '(you)' : null].filter(Boolean).join(' ')
+            : isBot
+              ? getBotLevel(meta.botLevel).elo
+              : undefined
+        }
         isBot={isBot}
         captured={material.captured[side]}
         advantage={side === 'w' ? material.diff : -material.diff}

@@ -32,8 +32,10 @@ export interface TimeControl {
 export interface SeatInfo {
   name: string;
   connected: boolean;
-  /** Player is signed in with a verified Google account. */
+  /** Player is signed in to an account. */
   verified: boolean;
+  /** Online rating, for signed-in players. */
+  rating: number | null;
 }
 
 export interface RoomSnapshot {
@@ -53,6 +55,10 @@ export interface RoomSnapshot {
   rematchOffer: Side | null;
   /** Your seat in this room, or null when spectating. */
   you: Side | null;
+  /** Rated games (from Quick match) change both players' ratings. */
+  rated: boolean;
+  /** Rating change applied when a rated game finished. */
+  ratingChange: { w: number; b: number } | null;
 }
 
 export type ClientMessage =
@@ -63,12 +69,16 @@ export type ClientMessage =
   | { t: 'move'; uci: string; ply: number }
   | { t: 'resign' }
   | { t: 'draw'; action: 'offer' | 'accept' | 'decline' }
-  | { t: 'rematch'; action: 'offer' | 'accept' };
+  | { t: 'rematch'; action: 'offer' | 'accept' }
+  | { t: 'seek'; tc: TimeControl }
+  | { t: 'cancelSeek' };
 
 export type ServerMessage =
   | { t: 'state'; room: RoomSnapshot }
   | { t: 'error'; message: string }
-  | { t: 'left' };
+  | { t: 'left' }
+  | { t: 'seeking'; tc: TimeControl; waiting: number }
+  | { t: 'seekCancelled' };
 
 export const ROOM_CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 export const MAX_NAME_LENGTH = 24;

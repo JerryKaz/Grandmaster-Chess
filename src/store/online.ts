@@ -5,6 +5,8 @@ import type { MoveInput } from '../lib/types';
 import { useGame } from './game';
 import { useSettings } from './settings';
 import { toast } from './ui';
+import { setOnAuthChanged, useAuth } from './auth';
+import { playSound } from '../lib/sound';
 
 type ConnStatus = 'idle' | 'connecting' | 'open' | 'reconnecting';
 
@@ -13,6 +15,10 @@ interface OnlineState {
   room: RoomSnapshot | null;
   busy: boolean;
   error: string | null;
+  /** Quick match: waiting in the queue for this time control. */
+  seeking: { tc: TimeControl; since: number } | null;
+  seek: (tc: TimeControl) => void;
+  cancelSeek: () => void;
   create: (tc: TimeControl, color: Side | 'random') => void;
   join: (code: string) => void;
   leave: () => void;
@@ -74,14 +80,22 @@ function connect() {
     }
     if (msg.t === 'state') {
       const prev = useOnline.getState().room;
-      useOnline.setState({ room: msg.room, busy: false, error: null });
+      useOnline.setState({ room: msg.room, busy: false, error: null, seeking: null });
+      if (prev?.id !== msg.room.id && msg.room.rated) playSound('notify');
+      // Rated game just ended: fetch the new rating.
+      if (msg.room.result && msg.room.ratingChange && !prev?.ratingChange) void useAuth.getState().refresh();
       save(ROOM_KEY, msg.room.id);
       useGame.getState().applyOnline(msg.room, Date.now());
       notifyChanges(prev, msg.room);
     } else if (msg.t === 'error') {
-      useOnline.setState({ busy: false, error: msg.message });
+      useOnline.setState({ busy: false, error: msg.message, seeking: null });
       if (useOnline.getState().room) toast(msg.message);
       if (/not found/i.test(msg.message)) remove(ROOM_KEY);
+    } else if (msg.t === 'seeking') {
+      const cur = useOnline.getState().seeking;
+      useOnline.setState({ busy: false, seeking: { tc: msg.tc, since: cur?.since ?? Date.now() } });
+    } else if (msg.t === 'seekCancelled') {
+      useOnline.setState({ seeking: null, busy: false });
     } else if (msg.t === 'left') {
       useOnline.setState({ room: null });
     }
@@ -118,6 +132,18 @@ export const useOnline = create<OnlineState>((set, get) => ({
   room: null,
   busy: false,
   error: null,
+  seeking: null,
+
+  seek: (tc) => {
+    set({ busy: true, error: null, seeking: { tc, since: Date.now() } });
+    connect();
+    rawSend({ t: 'seek', tc });
+  },
+
+  cancelSeek: () => {
+    rawSend({ t: 'cancelSeek' });
+    set({ seeking: null, busy: false });
+  },
 
   create: (tc, color) => {
     set({ busy: true, error: null });
@@ -156,8 +182,21 @@ export const useOnline = create<OnlineState>((set, get) => ({
   rematch: () => rawSend({ t: 'rematch', action: 'offer' }),
 }));
 
+/** The server reads the session when the socket opens, so reconnect after signing in or out. */
+function reconnectForAuth() {
+  useOnline.setState({ seeking: null });
+  if (!ws) return;
+  const old = ws;
+  ws = null;
+  old.onclose = null;
+  old.close();
+  retry = 0;
+  connect();
+}
+
 /** Reconnect to the last room on start-up (page reload), and when the tab comes back online. */
 export function initOnline() {
+  setOnAuthChanged(reconnectForAuth);
   const params = new URLSearchParams(location.search);
   const fromUrl = params.get('game');
   if (fromUrl) {

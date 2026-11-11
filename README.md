@@ -45,11 +45,16 @@ The old version used Unicode piece glyphs, a fixed 10-minute clock and three cro
 - **Streak mode:** puzzles get harder each time, and one mistake ends the run. Your best streak is saved.
 - Hint, retry, show solution, and "Analyse this puzzle" on the analysis board. Any checkmating move is accepted, even if it differs from the stored solution.
 
-**Accounts (optional)**
-- **Sign in with Google** using Google Identity Services. The server verifies the ID token with `google-auth-library` and issues its own session: a random token in an httpOnly, SameSite=Lax cookie, stored server-side only as a SHA-256 hash, valid for 30 days.
-- Puzzle rating and game history sync across devices.
-- In online games your seat follows your account, and opponents see your Google name with a verified badge.
-- Guests can still play everything without signing in.
+**Accounts and online multiplayer**
+- **Create an account** with email and password, or **continue with Google**. Online play requires an account; everything else works as a guest.
+- **Quick match:** pick a time control (bullet, blitz or rapid) and get paired with the closest-rated player waiting for the same game. These games are **rated** (Elo, starting at 1500). Games aborted before both players move don't count.
+- **Play a friend:** create a casual game and share the link or code. Anyone without an account who opens the link can watch as a spectator.
+- Your rating, win/draw/loss record, puzzle rating and game history sync across devices.
+- **Security:**
+  - Passwords are hashed with scrypt.
+  - Login errors don't reveal which emails exist, and repeated failures are locked out for 15 minutes.
+  - Sessions use a random token in an httpOnly, SameSite=Lax cookie, stored server-side only as a SHA-256 hash.
+  - Google ID tokens are verified with `google-auth-library`. A Google sign-in links to an existing email account with the same verified address.
 
 **Improve**
 - **Game review:** every move is classified (Book, Best, Excellent, Good, Inaccuracy, Mistake, Blunder) with Lichess-style accuracy, an evaluation graph and best-move arrows.
@@ -63,9 +68,9 @@ The old version used Unicode piece glyphs, a fixed 10-minute clock and three cro
 
 ```
 server.ts               Express + WebSocket server (dev: Vite middleware, prod: static dist/)
-server/rooms.ts         Authoritative online games: validates every move, runs clocks, handles draws/rematches/reconnects
+server/rooms.ts         Authoritative online games and matchmaking: validates moves, runs clocks, rates games
 server/coach.ts         /api/coach: Gemini with structured JSON output, rate-limited
-server/auth.ts          Google sign-in, sessions, CSRF/origin checks, progress sync (/api/auth/*, /api/me/*)
+server/auth.ts          Email/password + Google sign-in, sessions, CSRF/origin checks, progress sync
 server/db.ts            Tiny JSON-file store (atomic writes). Swap for Postgres/MongoDB when you outgrow it
 public/puzzles/         Curated puzzle set (CC0)
 shared/protocol.ts      Typed client/server message protocol
