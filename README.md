@@ -46,7 +46,7 @@ The old version used Unicode piece glyphs, a fixed 10-minute clock and three cro
 - Hint, retry, show solution, and "Analyse this puzzle" on the analysis board. Any checkmating move is accepted, even if it differs from the stored solution.
 
 **Accounts and online multiplayer**
-- **Sign in the usual way:** Continue with Apple or Continue with Google, or create an account with email (with a "Log in" link for returning email users). Apple and Google create the account automatically on first use, and an Apple or Google sign-in links to an existing email account with the same verified address. Online play requires an account; everything else works as a guest.
+- **Sign-in screen:** "Create an account" (name, email, password) at the top with a "Log in" link, then "or continue with" **Apple** and **Google** buttons underneath. Apple and Google create the account automatically on first use, and an Apple or Google sign-in links to an existing email account with the same verified address. Online play requires an account; everything else works as a guest.
 - **Quick match:** pick a time control (bullet, blitz or rapid) and get paired with the closest-rated player waiting for the same game. These games are **rated** (Elo, starting at 1500). Games aborted before both players move don't count.
 - **Play a friend:** create a casual game and share the link or code. Anyone without an account who opens the link can watch as a spectator.
 - Your rating, win/draw/loss record, puzzle rating and game history sync across devices.
@@ -109,7 +109,7 @@ Optional features. Copy `.env.example` to `.env`, then:
   2. Create a **Services ID**. That is your `APPLE_CLIENT_ID`, for example `com.yourname.grandmaster.web`.
   3. On the Services ID, configure *Sign in with Apple*: add your domain and a **Return URL** such as `https://your-domain.com/`. That is your `APPLE_REDIRECT_URI`.
 
-  Apple only accepts HTTPS domains, so Apple sign-in works on your deployed site, not on `localhost`. During development, unconfigured providers show as greyed-out "Dev only" buttons; in production they are hidden.
+  Apple only accepts HTTPS domains, so Apple sign-in works on your deployed site, not on `localhost`. The Apple and Google buttons are always shown. Until a provider is configured, tapping it explains that it is not switched on yet (in development it also tells you which `.env` values to add).
 
   Accounts are saved to `data/db.json` (`DATA_DIR`). On hosts with ephemeral disks, such as Cloud Run, mount a volume or move the store to Postgres or MongoDB.
 

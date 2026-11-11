@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { loadGoogleIdentity, useAuth } from '../../store/auth';
-import { Button, Segmented, cx } from '../ui/kit';
+import { Button, cx } from '../ui/kit';
 
-// All three providers share one look: full-width white pills, 40px tall (Google's "large" button height).
-const PILL = 'flex h-10 w-full items-center justify-center gap-2.5 rounded-full text-[15px] font-medium transition active:scale-[0.99] disabled:opacity-50';
+const PILL =
+  'flex h-11 w-full items-center justify-center gap-2.5 rounded-full text-[15px] font-medium transition active:scale-[0.99] disabled:opacity-60';
 
 function AppleLogo() {
   return (
@@ -25,10 +25,10 @@ function GoogleLogo() {
   );
 }
 
-/** Google's own button (required for its sign-in flow), styled to match the other pills. */
+/** Google's own sign-in button (required by Google), rendered as a white "Continue with Google" pill. */
 function GoogleButton({ clientId }: { clientId: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
 
   useEffect(() => {
     if (!ref.current) return;
@@ -46,8 +46,9 @@ function GoogleButton({ clientId }: { clientId: string }) {
           logo_alignment: 'center',
           width: Math.min(400, ref.current.clientWidth || 320),
         });
+        setState('ready');
       })
-      .catch((e: Error) => setError(e.message));
+      .catch(() => setState('failed'));
     return () => {
       cancelled = true;
     };
@@ -55,20 +56,13 @@ function GoogleButton({ clientId }: { clientId: string }) {
 
   return (
     <div>
-      <div ref={ref} className="flex min-h-10 justify-center overflow-hidden rounded-full" />
-      {error && <p className="mt-1 text-center text-xs text-rose-400">{error}</p>}
-    </div>
-  );
-}
-
-/** Shown during development only, so you can see where a provider will appear before it is configured. */
-function NotConfigured({ icon, label, env }: { icon: React.ReactNode; label: string; env: string }) {
-  return (
-    <div>
-      <button type="button" disabled className={cx(PILL, 'bg-white text-zinc-900')}>
-        {icon} {label}
-      </button>
-      <p className="mt-1 text-center text-[11px] text-zinc-500">Dev only: set {env} to enable</p>
+      {state !== 'ready' && (
+        <div className={cx(PILL, 'bg-white text-zinc-900', state === 'loading' && 'opacity-60')} aria-hidden>
+          <GoogleLogo /> Continue with Google
+        </div>
+      )}
+      <div ref={ref} className={cx('flex justify-center', state !== 'ready' && 'hidden')} />
+      {state === 'failed' && <p className="mt-1 text-center text-xs text-rose-400">Couldn't reach Google. Check your connection and reload.</p>}
     </div>
   );
 }
@@ -76,14 +70,21 @@ function NotConfigured({ icon, label, env }: { icon: React.ReactNode; label: str
 const inputClass =
   'h-11 w-full rounded-lg bg-black/30 px-3 text-sm text-white ring-1 ring-white/10 outline-none placeholder:text-zinc-500 focus:ring-emerald-400';
 
-function EmailForm({ initialMode, onBack }: { initialMode: 'signup' | 'login'; onBack: () => void }) {
+/**
+ * Account screen: create an account (or log in) with email at the top,
+ * then "Continue with Apple" and "Continue with Google" underneath.
+ */
+export function AuthForm() {
+  const clientId = useAuth((s) => s.clientId);
+  const apple = useAuth((s) => s.apple);
   const busy = useAuth((s) => s.busy);
-  const [mode, setMode] = useState(initialMode);
+  const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [providerNote, setProviderNote] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,22 +94,19 @@ function EmailForm({ initialMode, onBack }: { initialMode: 'signup' | 'login'; o
     if (err) setError(err);
   };
 
+  const notSetUp = (provider: 'Apple' | 'Google') =>
+    setProviderNote(
+      `${provider} sign-in isn't switched on for this site yet.` +
+        (import.meta.env.DEV ? ` Add ${provider === 'Apple' ? 'APPLE_CLIENT_ID and APPLE_REDIRECT_URI' : 'GOOGLE_CLIENT_ID'} to .env and restart.` : ' Please create an account with email for now.'),
+    );
+
   return (
     <div className="flex flex-col gap-4">
-      <button type="button" onClick={onBack} className="flex items-center gap-1.5 self-start text-sm text-zinc-400 hover:text-white">
-        <ArrowLeft size={16} /> Other ways to sign in
-      </button>
-      <Segmented
-        value={mode}
-        onChange={(m) => {
-          setMode(m);
-          setError(null);
-        }}
-        options={[
-          { value: 'login', label: 'Log in' },
-          { value: 'signup', label: 'Create account' },
-        ]}
-      />
+      <div>
+        <h3 className="text-lg font-bold text-white">{mode === 'signup' ? 'Create an account' : 'Log in'}</h3>
+        <p className="text-sm text-zinc-400">{mode === 'signup' ? 'Free, and takes a few seconds.' : 'Welcome back.'}</p>
+      </div>
+
       <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
         {mode === 'signup' && (
           <label className="flex flex-col gap-1.5">
@@ -118,7 +116,7 @@ function EmailForm({ initialMode, onBack }: { initialMode: 'signup' | 'login'; o
         )}
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-zinc-400">Email</span>
-          <input className={inputClass} type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" required autoFocus />
+          <input className={inputClass} type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" required />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-zinc-400">Password</span>
@@ -147,58 +145,53 @@ function EmailForm({ initialMode, onBack }: { initialMode: 'signup' | 'login'; o
             {error}
           </p>
         )}
-        <Button type="submit" variant="primary" className="min-h-12" disabled={busy}>
+        <Button type="submit" variant="primary" className="min-h-12 text-base" disabled={busy}>
           {busy && <Loader2 size={18} className="animate-spin" />}
           {mode === 'signup' ? 'Create account' : 'Log in'}
         </Button>
+        <p className="text-center text-sm text-zinc-400">
+          {mode === 'signup' ? 'Already have an account? ' : 'New here? '}
+          <button
+            type="button"
+            className="font-semibold text-emerald-300 hover:underline"
+            onClick={() => {
+              setMode(mode === 'signup' ? 'login' : 'signup');
+              setError(null);
+            }}
+          >
+            {mode === 'signup' ? 'Log in' : 'Create an account'}
+          </button>
+        </p>
       </form>
-    </div>
-  );
-}
 
-/**
- * Sign-in chooser, the way most sites do it:
- * Continue with Apple / Continue with Google, or create an account (or log in) with email.
- */
-export function AuthForm() {
-  const clientId = useAuth((s) => s.clientId);
-  const apple = useAuth((s) => s.apple);
-  const busy = useAuth((s) => s.busy);
-  const [email, setEmail] = useState<null | 'signup' | 'login'>(null);
-  const dev = import.meta.env.DEV;
-
-  if (email) return <EmailForm initialMode={email} onBack={() => setEmail(null)} />;
-
-  return (
-    <div className="flex flex-col gap-3">
-      {apple ? (
-        <button type="button" className={cx(PILL, 'bg-white text-zinc-900 hover:bg-zinc-100')} onClick={() => void useAuth.getState().signInWithApple()} disabled={busy}>
-          <AppleLogo /> Continue with Apple
-        </button>
-      ) : (
-        dev && <NotConfigured icon={<AppleLogo />} label="Continue with Apple" env="APPLE_CLIENT_ID" />
-      )}
-
-      {clientId ? <GoogleButton clientId={clientId} /> : dev && <NotConfigured icon={<GoogleLogo />} label="Continue with Google" env="GOOGLE_CLIENT_ID" />}
-
-      <div className="my-1 flex items-center gap-3 text-xs text-zinc-500">
+      <div className="flex items-center gap-3 text-xs text-zinc-500">
         <span className="h-px flex-1 bg-white/10" />
-        New to Grandmaster?
+        or continue with
         <span className="h-px flex-1 bg-white/10" />
       </div>
 
-      <button type="button" className={cx(PILL, 'bg-emerald-500 font-semibold text-white shadow-[0_3px_0_#047857] hover:bg-emerald-400')} onClick={() => setEmail('signup')}>
-        Create an account
-      </button>
-      <p className="text-center text-sm text-zinc-400">
-        Already have an account?{' '}
-        <button type="button" className="font-semibold text-emerald-300 hover:underline" onClick={() => setEmail('login')}>
-          Log in
+      <div className="flex flex-col gap-2.5">
+        <button
+          type="button"
+          className={cx(PILL, 'bg-black text-white ring-1 ring-white/25 hover:bg-zinc-950')}
+          disabled={busy}
+          onClick={() => (apple ? void useAuth.getState().signInWithApple() : notSetUp('Apple'))}
+        >
+          <AppleLogo /> Continue with Apple
         </button>
-      </p>
-      <p className="text-center text-[11px] leading-relaxed text-zinc-500">
-        Apple and Google create your account automatically the first time you use them.
-      </p>
+        {clientId ? (
+          <GoogleButton clientId={clientId} />
+        ) : (
+          <button type="button" className={cx(PILL, 'bg-white text-zinc-900 hover:bg-zinc-100')} onClick={() => notSetUp('Google')}>
+            <GoogleLogo /> Continue with Google
+          </button>
+        )}
+        {providerNote && (
+          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-200 ring-1 ring-amber-400/20" role="status">
+            {providerNote}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
